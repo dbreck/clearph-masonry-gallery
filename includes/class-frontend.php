@@ -113,6 +113,7 @@ class ClearPH_Frontend
         $html .= ' data-border-radius="' . esc_attr($settings['border_radius']) . '"';
         $html .= ' data-column-margin="' . esc_attr($settings['column_margin']) . '"';
         $html .= ' data-gallery-group="' . esc_attr($gallery_group) . '"';
+        $html .= ' data-gallery-id="' . esc_attr($gallery_id) . '"';
         $html .= ' style="--border-radius: ' . esc_attr($settings['border_radius']) . 'px; --column-margin: ' . esc_attr($settings['column_margin']) . ';">';
 
         foreach ($images as $image_id) {

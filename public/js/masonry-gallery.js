@@ -224,21 +224,26 @@ jQuery(document).ready(function ($) {
     e.preventDefault()
     const $btn = $(this)
     const $filters = $btn.closest(".clearph-gallery-filters")
-    const $gallery = $filters.next(".clearph-gallery")
+    const galleryId = $filters.data("gallery-id")
+    const $gallery = $('.clearph-gallery[data-gallery-id="' + galleryId + '"]')
     const filter = $btn.data("filter")
+
+    if (!$gallery.length) return
 
     // Update active state
     $filters.find(".filter-btn").removeClass("active")
     $btn.addClass("active")
 
     // Filter gallery items
-    if (filter === "*") {
-      // Show all items
-      $gallery.find(".gallery-item").each(function () {
-        const $item = $(this)
+    $gallery.find(".gallery-item").each(function () {
+      const $item = $(this)
+      const category = $item.data("category") || ""
+
+      const show = filter === "*" || category === filter
+
+      if (show) {
         $item.css("display", "")
 
-        // Re-trigger GSAP animation if available
         if (typeof gsap !== "undefined") {
           gsap.fromTo(
             $item[0],
@@ -248,30 +253,9 @@ jQuery(document).ready(function ($) {
         } else {
           $item.addClass("animate-in")
         }
-      })
-    } else {
-      // Show only matching items
-      $gallery.find(".gallery-item").each(function () {
-        const $item = $(this)
-        const category = $item.data("category")
-
-        if (category === filter) {
-          $item.css("display", "")
-
-          // Re-trigger GSAP animation if available
-          if (typeof gsap !== "undefined") {
-            gsap.fromTo(
-              $item[0],
-              { opacity: 0, y: 20, scale: 0.95 },
-              { opacity: 1, y: 0, scale: 1, duration: 0.5, ease: "power2.out" }
-            )
-          } else {
-            $item.addClass("animate-in")
-          }
-        } else {
-          $item.css("display", "none")
-        }
-      })
-    }
+      } else {
+        $item.css("display", "none")
+      }
+    })
   })
 })
