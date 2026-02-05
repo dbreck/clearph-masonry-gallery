@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Test Gallery Animations</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        margin: 20px;
+      }
+      .test-note {
+        background: #f0f0f0;
+        padding: 15px;
+        margin: 20px 0;
+        border-radius: 5px;
+      }
+      .test-note h3 {
+        margin-top: 0;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Gallery Animation Test</h1>
+
+    <div class="test-note">
+      <h3>Testing Instructions:</h3>
+      <ol>
+        <li>Load a page with the gallery shortcode</li>
+        <li>Scroll down to see the gallery</li>
+        <li>Images should fade in with a slight upward movement as they enter the viewport</li>
+        <li>Hover over images to see the scale animation</li>
+        <li>Check browser console for any JavaScript errors</li>
+      </ol>
+    </div>
+
+    <div class="test-note">
+      <h3>Expected Behavior:</h3>
+      <ul>
+        <li>✅ Images start invisible (opacity: 0)</li>
+        <li>✅ Images fade in when they enter the viewport</li>
+        <li>✅ Smooth upward movement during fade-in</li>
+        <li>✅ Scale effect on hover</li>
+        <li>✅ Better image quality for Large/Wide images</li>
+        <li>✅ Responsive image sizes with srcset</li>
+      </ul>
+    </div>
+
+    <div class="test-note">
+      <h3>Debugging:</h3>
+      <p>If animations aren't working:</p>
+      <ol>
+        <li>Check if GSAP is loaded: <code>typeof gsap !== "undefined"</code></li>
+        <li>Check if images have "image-ready" class</li>
+        <li>Check browser console for errors</li>
+        <li>Verify CSS is loading properly</li>
+      </ol>
+    </div>
+
+    <script>
+      console.log("Gallery Animation Test Page Loaded")
+      console.log("GSAP Available:", typeof gsap !== "undefined")
+      console.log("jQuery Available:", typeof jQuery !== "undefined")
+    </script>
+  </body>
+</html>

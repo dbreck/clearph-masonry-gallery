@@ -1,0 +1,371 @@
+/* Clear pH Masonry Gallery Frontend Styles */
+
+/* Category Filters */
+.clearph-gallery-filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 40px;
+    margin-bottom: 40px;
+    padding: 0;
+    background: transparent;
+}
+
+.clearph-gallery-filters .filter-btn {
+    padding: 10px 0;
+    border: none;
+    background: transparent;
+    color: #999;
+    font-size: 16px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    cursor: pointer;
+    border-bottom: 3px solid transparent;
+    transition: all 0.3s ease;
+}
+
+.clearph-gallery-filters .filter-btn:hover {
+    color: #333;
+}
+
+.clearph-gallery-filters .filter-btn.active {
+    color: #333;
+    border-bottom-color: #333;
+}
+
+.clearph-gallery {
+    margin: 20px 0;
+    display: grid;
+    gap: var(--column-margin, 20px);
+    grid-auto-flow: row dense;
+    /* Optimize for smooth scrolling */
+    contain: layout style;
+}
+
+/* Dynamic grid columns - Micro-column system for fractional width support
+   Each visual column = 2 micro-columns, allowing 0.5 column increments
+   Example: 3-column gallery = 6 micro-columns
+            - 1 visual col = span 2 micro-cols (33.33%)
+            - 1.5 visual cols = span 3 micro-cols (50%)
+            - 2 visual cols = span 4 micro-cols (66.66%)
+*/
+.clearph-gallery[data-columns="2"] {
+    grid-template-columns: repeat(4, 1fr);
+    /* 2 visual cols = 4 micro-cols */
+}
+
+.clearph-gallery[data-columns="3"] {
+    grid-template-columns: repeat(6, 1fr);
+    /* 3 visual cols = 6 micro-cols */
+}
+
+.clearph-gallery[data-columns="4"] {
+    grid-template-columns: repeat(8, 1fr);
+    /* 4 visual cols = 8 micro-cols */
+}
+
+.clearph-gallery[data-columns="5"] {
+    grid-template-columns: repeat(10, 1fr);
+    /* 5 visual cols = 10 micro-cols */
+}
+
+.clearph-gallery[data-columns="6"] {
+    grid-template-columns: repeat(12, 1fr);
+    /* 6 visual cols = 12 micro-cols */
+}
+
+/* Equal height rows when masonry is disabled */
+.clearph-gallery:not(.masonry-enabled) {
+    grid-auto-rows: 300px;
+}
+
+/* Auto-sizing rows for masonry - 175px base provides better content preservation */
+.clearph-gallery.masonry-enabled {
+    grid-auto-rows: 175px;
+}
+
+.clearph-gallery .gallery-item {
+    position: relative;
+    overflow: hidden;
+    border-radius: var(--border-radius, 0);
+    transition: transform 0.3s ease;
+    will-change: transform;
+    transform: translateZ(0);
+}
+
+.clearph-gallery .gallery-item img {
+    width: 100%;
+    height: 100%;
+    display: block;
+    transition: transform 0.4s ease, opacity 0.3s ease;
+    /* Slower transition for smoother effect */
+    object-fit: cover;
+    /* Default fallback */
+    /* Optimize for smooth scaling */
+    will-change: transform;
+    transform: translateZ(0);
+}
+
+/* Lazy loading states */
+.clearph-gallery .gallery-item img.lazy-image {
+    opacity: 0.8;
+    filter: blur(2px);
+}
+
+.clearph-gallery .gallery-item img.lazy-image.loaded {
+    opacity: 1;
+    filter: blur(0);
+}
+
+/* Force object-fit based on data attribute */
+.clearph-gallery[data-object-fit="cover"] .gallery-item img {
+    object-fit: cover;
+}
+
+.clearph-gallery[data-object-fit="contain"] .gallery-item img {
+    object-fit: contain;
+}
+
+.clearph-gallery[data-object-fit="fill"] .gallery-item img {
+    object-fit: fill;
+}
+
+/* Masonry size classes - updated for micro-column system
+   NOTE: These are for backward compatibility with old galleries.
+   New galleries use inline styles with data-column-span and data-row-span attributes.
+*/
+
+/* Regular: 1 visual column = 2 micro-columns */
+.clearph-gallery.masonry-enabled .gallery-item.size-regular {
+    grid-row: span 2;
+    grid-column: span 2;
+    /* 1 visual column */
+}
+
+/* Wide: 2 visual columns = 4 micro-columns */
+.clearph-gallery.masonry-enabled .gallery-item.size-wide {
+    grid-column: span 4;
+    /* 2 visual columns */
+    grid-row: span 2;
+}
+
+/* Tall: 1 visual column, 4 rows */
+.clearph-gallery.masonry-enabled .gallery-item.size-tall {
+    grid-column: span 2;
+    /* 1 visual column */
+    grid-row: span 4;
+}
+
+/* Large: 2 visual columns, 4 rows */
+.clearph-gallery.masonry-enabled .gallery-item.size-large {
+    grid-column: span 4;
+    /* 2 visual columns */
+    grid-row: span 4;
+}
+
+/* XL (Extra Large) - spans all columns and 6 rows */
+.clearph-gallery.masonry-enabled .gallery-item.size-xl {
+    grid-row: span 6;
+}
+
+/* XL column spans - full width in micro-columns */
+.clearph-gallery.masonry-enabled[data-columns="2"] .gallery-item.size-xl {
+    grid-column: span 4;
+    /* 2 visual cols = 4 micro-cols */
+}
+
+.clearph-gallery.masonry-enabled[data-columns="3"] .gallery-item.size-xl {
+    grid-column: span 6;
+    /* 3 visual cols = 6 micro-cols */
+}
+
+.clearph-gallery.masonry-enabled[data-columns="4"] .gallery-item.size-xl {
+    grid-column: span 8;
+    /* 4 visual cols = 8 micro-cols */
+}
+
+.clearph-gallery.masonry-enabled[data-columns="5"] .gallery-item.size-xl {
+    grid-column: span 10;
+    /* 5 visual cols = 10 micro-cols */
+}
+
+.clearph-gallery.masonry-enabled[data-columns="6"] .gallery-item.size-xl {
+    grid-column: span 12;
+    /* 6 visual cols = 12 micro-cols */
+}
+
+/* When masonry is disabled, all items are regular (1 visual column = 2 micro-columns) */
+.clearph-gallery:not(.masonry-enabled) .gallery-item {
+    grid-row: span 1;
+    grid-column: span 2;
+    /* 1 visual column */
+}
+
+/* Lightbox styling */
+.clearph-gallery .gallery-item.lightbox-clickable {
+    cursor: pointer;
+}
+
+.clearph-gallery .gallery-item:hover img {
+    transform: scale(1.1) translateZ(0);
+}
+
+/* Fallback animations when GSAP isn't available */
+.clearph-gallery .gallery-item.animate-in {
+    opacity: 1;
+    transform: translateY(0) scale(1) translateZ(0);
+    transition: opacity 0.8s ease, transform 0.8s ease;
+}
+
+/* Smooth scrolling optimization */
+@media (prefers-reduced-motion: no-preference) {
+    .clearph-gallery {
+        scroll-behavior: smooth;
+    }
+}
+
+/* Reduce animations for users who prefer reduced motion */
+@media (prefers-reduced-motion: reduce) {
+    .clearph-gallery .gallery-item {
+        transition: none;
+        will-change: auto;
+    }
+
+    .clearph-gallery .gallery-item img {
+        transition: none;
+        will-change: auto;
+    }
+}
+
+/* Responsive breakpoints - micro-column system */
+@media (max-width: 1024px) {
+
+    /* 6 cols → 4 cols, 5 cols → 3 cols */
+    .clearph-gallery[data-columns="6"] {
+        grid-template-columns: repeat(8, 1fr);
+        /* 4 visual cols = 8 micro-cols */
+    }
+
+    .clearph-gallery[data-columns="5"] {
+        grid-template-columns: repeat(6, 1fr);
+        /* 3 visual cols = 6 micro-cols */
+    }
+
+    /* Wide and Large collapse to 1 visual column */
+    .clearph-gallery.masonry-enabled .gallery-item.size-wide,
+    .clearph-gallery.masonry-enabled .gallery-item.size-large {
+        grid-column: span 2;
+        /* 1 visual column */
+    }
+
+    /* XL adjusts to new grid widths */
+    .clearph-gallery.masonry-enabled[data-columns="6"] .gallery-item.size-xl {
+        grid-column: span 8;
+        /* 4 visual cols = 8 micro-cols */
+    }
+
+    .clearph-gallery.masonry-enabled[data-columns="5"] .gallery-item.size-xl {
+        grid-column: span 6;
+        /* 3 visual cols = 6 micro-cols */
+    }
+}
+
+@media (max-width: 768px) {
+    .clearph-gallery {
+        gap: calc(var(--column-margin, 20px) * 0.75);
+        grid-auto-rows: 220px;
+    }
+
+    .clearph-gallery.masonry-enabled {
+        grid-auto-rows: 160px;
+    }
+
+    /* All galleries collapse to 2 visual columns = 4 micro-columns */
+    .clearph-gallery[data-columns="6"],
+    .clearph-gallery[data-columns="5"],
+    .clearph-gallery[data-columns="4"],
+    .clearph-gallery[data-columns="3"],
+    .clearph-gallery[data-columns="2"] {
+        grid-template-columns: repeat(4, 1fr);
+        /* 2 visual cols = 4 micro-cols */
+    }
+
+    .clearph-gallery.masonry-enabled .gallery-item.size-regular {
+        grid-row: span 2;
+    }
+
+    .clearph-gallery.masonry-enabled .gallery-item.size-tall,
+    .clearph-gallery.masonry-enabled .gallery-item.size-large {
+        grid-row: span 3;
+        /* Reduced on mobile */
+    }
+
+    .clearph-gallery.masonry-enabled .gallery-item.size-xl {
+        grid-row: span 4;
+        /* Reduced on mobile */
+    }
+
+    /* Wide and Large collapse to 1 visual column on tablet */
+    .clearph-gallery.masonry-enabled .gallery-item.size-wide,
+    .clearph-gallery.masonry-enabled .gallery-item.size-large {
+        grid-column: span 2;
+        /* 1 visual column */
+    }
+
+    /* XL spans full width (2 visual cols = 4 micro-cols) on tablet */
+    .clearph-gallery.masonry-enabled .gallery-item.size-xl {
+        grid-column: span 4;
+        /* 2 visual cols = 4 micro-cols */
+    }
+
+    /* Reduce animations on mobile for better performance */
+    .clearph-gallery .gallery-item {
+        will-change: auto;
+    }
+
+    .clearph-gallery .gallery-item img {
+        will-change: auto;
+        transition: none;
+    }
+}
+
+@media (max-width: 480px) {
+    .clearph-gallery {
+        gap: calc(var(--column-margin, 20px) * 0.5);
+        /* 1 visual column = 2 micro-columns for consistency */
+        grid-template-columns: repeat(2, 1fr) !important;
+        grid-auto-rows: 280px;
+    }
+
+    .clearph-gallery.masonry-enabled {
+        grid-auto-rows: 220px;
+    }
+
+    /* All items span full width (2 micro-cols) and single row on mobile */
+    .clearph-gallery .gallery-item {
+        grid-column: span 2 !important;
+        /* Full width = 2 micro-cols */
+        grid-row: span 1 !important;
+    }
+}
+
+/* Dark mode support */
+@media (prefers-color-scheme: dark) {
+    .clearph-gallery .gallery-item.lightbox-clickable:hover::after {
+        background: rgba(255, 255, 255, 0.1);
+    }
+}
+
+/* Print styles */
+@media print {
+    .clearph-gallery {
+        display: block !important;
+    }
+
+    .clearph-gallery .gallery-item {
+        display: inline-block;
+        width: 48%;
+        margin: 1%;
+        break-inside: avoid;
+    }
+}
