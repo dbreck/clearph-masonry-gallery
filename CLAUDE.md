@@ -197,13 +197,26 @@ State is saved to orderHistory before each change for undo functionality.
 
 ## Salient Theme Integration
 
-This plugin has hard dependencies on Salient theme features:
+This plugin is designed for use with the Salient theme but works on other themes with reduced functionality:
 
-- **GSAP:** Detected via `window.gsap` check, uses for viewport animations and hover effects (has CSS fallback)
+- **GSAP:** Detected via `typeof gsap !== "undefined"` at runtime. Uses for viewport animations and hover effects (has CSS fallback if GSAP absent)
 - **FancyBox 3:** Uses `$.fancybox()` from Salient for lightbox (no fallback - required)
 - **Image Sizes:** Expects Salient's custom image sizes (`large_featured`, `wide`, etc.)
 
-The plugin will work with reduced functionality on other themes but lightbox will fail.
+### CRITICAL: GSAP Must NOT Be a Script Dependency
+
+**Never add GSAP as a `wp_register_script` dependency.** Themes commonly deregister, rename, or swap GSAP script handles (e.g., to remove duplicates from CDN plugins). If GSAP is listed as a hard dependency and gets deregistered, WordPress will **silently skip loading the entire gallery JS file** with no error.
+
+The correct pattern (in `class-assets.php`):
+```php
+// GOOD - only depend on jQuery, detect GSAP at runtime
+wp_register_script('clearph-masonry-frontend', $url, array('jquery'), ...);
+
+// BAD - will break if theme deregisters 'gsap' handle
+wp_register_script('clearph-masonry-frontend', $url, array('jquery', 'gsap'), ...);
+```
+
+The JS already checks `typeof gsap !== "undefined"` before using GSAP and falls back to CSS animations.
 
 ## Content Protection
 
@@ -259,10 +272,35 @@ clearph-masonry-gallery/
 └── test-animations.html           # Developer testing guide
 ```
 
+## GitHub Updater
+
+The plugin includes a built-in GitHub updater (`includes/class-github-updater.php`) that checks for new releases and integrates with WordPress's native plugin update system.
+
+**How it works:**
+- Hooks into `pre_set_site_transient_update_plugins` to check the GitHub Releases API
+- Compares the latest release tag (e.g., `v1.2.1`) against the installed version
+- Shows updates in **Plugins > Updates** like any wordpress.org plugin
+- "Check for updates" link in plugin row clears the transient to force a fresh check
+- After install, renames the extracted folder from `owner-repo-hash/` to `clearph-masonry-gallery/`
+
+**Release workflow:**
+1. Bump version in plugin header AND `CLEARPH_MASONRY_VERSION` constant
+2. Commit and push to `master`
+3. Create a tagged GitHub release (e.g., `v1.3.0`) — the updater checks releases, not commits
+
+## Progressive Enhancement Rules
+
+**Never hide elements in CSS that depend on JS to reveal them.** If JS fails to load or execute, content must still be visible.
+
+- Don't use `opacity: 0` on gallery items in CSS — let GSAP's `gsap.set()` handle hiding
+- Don't use `filter: blur()` as a loading placeholder — native `loading="lazy"` handles lazy loading
+- Don't add decorative CSS (`background`, `box-shadow`, `border-radius`) to `.gallery-item` base styles — these cause visual artifacts and should be opt-in via gallery settings
+
 ## Technical Notes
 
 - **CSS Grid vs JavaScript Masonry:** Uses CSS Grid for better performance and simpler code, trade-off is less organic brick-wall layout
-- **Lazy Loading:** IntersectionObserver API with 100px rootMargin (no polyfill - modern browsers only)
+- **Lazy Loading:** Native `loading="lazy"` attribute on images. No custom IntersectionObserver blur/fade placeholder.
 - **Responsive Strategy:** Breakpoints at 480px, 768px, 1024px with column reduction and masonry size adjustments
 - **Performance:** Uses `will-change: transform`, hardware acceleration via `translateZ(0)`, conditional asset loading
 - **Browser Support:** Modern browsers only (CSS Grid, IntersectionObserver, ES6 classes - no IE11)
+- **Category Filtering:** Filter buttons and gallery are linked by `data-gallery-id` attribute (not DOM traversal) to work inside WPBakery wrappers
