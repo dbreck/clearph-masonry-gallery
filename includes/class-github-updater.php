@@ -63,6 +63,8 @@ class ClearPH_GitHub_Updater {
 		add_filter( 'pre_set_site_transient_update_plugins', array( $this, 'check_update' ) );
 		add_filter( 'plugins_api', array( $this, 'plugin_info' ), 20, 3 );
 		add_filter( 'upgrader_post_install', array( $this, 'after_install' ), 10, 3 );
+		add_filter( 'plugin_row_meta', array( $this, 'plugin_row_meta' ), 10, 2 );
+		add_action( 'admin_init', array( $this, 'handle_check_updates' ) );
 	}
 
 	/**
@@ -204,5 +206,48 @@ class ClearPH_GitHub_Updater {
 		}
 
 		return $result;
+	}
+
+	/**
+	 * Add "Check for updates" link to the plugin row meta.
+	 *
+	 * @param array  $plugin_meta Plugin meta links.
+	 * @param string $plugin_file Plugin file path.
+	 * @return array
+	 */
+	public function plugin_row_meta( $plugin_meta, $plugin_file ) {
+		if ( $plugin_file !== $this->plugin_file ) {
+			return $plugin_meta;
+		}
+
+		$check_url = wp_nonce_url(
+			admin_url( 'plugins.php?clearph_check_updates=' . rawurlencode( $this->slug ) ),
+			'clearph_check_updates_' . $this->slug
+		);
+
+		$plugin_meta[] = '<a href="' . esc_url( $check_url ) . '">Check for updates</a>';
+
+		return $plugin_meta;
+	}
+
+	/**
+	 * Handle the "Check for updates" action.
+	 */
+	public function handle_check_updates() {
+		if ( ! isset( $_GET['clearph_check_updates'] ) || $_GET['clearph_check_updates'] !== $this->slug ) {
+			return;
+		}
+
+		if ( ! current_user_can( 'update_plugins' ) ) {
+			return;
+		}
+
+		check_admin_referer( 'clearph_check_updates_' . $this->slug );
+
+		// Clear the cached update transient to force a fresh check.
+		delete_site_transient( 'update_plugins' );
+
+		wp_safe_redirect( admin_url( 'plugins.php' ) );
+		exit;
 	}
 }
