@@ -16,9 +16,11 @@ jQuery(document).ready(function ($) {
       this.saveCurrentOrder() // Save initial order for undo
       this.maybeInitListView()
       this.loadExistingImageSizing() // Load grid sizing for existing images
+      this.loadExistingVideoSettings() // Load video settings for existing videos
       this.populateCategoryDropdowns() // Populate category dropdowns from settings
       this.loadImageCategories() // Load existing category assignments
       this.bindCategorySave() // Bind category save on post save
+      this.bindVideoSettings() // Bind video settings change handlers
     },
 
     initSortable: function () {
@@ -409,9 +411,9 @@ jQuery(document).ready(function ($) {
 
       if (typeof wp !== "undefined" && wp.media) {
         const mediaUploader = wp.media({
-          title: "Select Images for Gallery",
+          title: "Select Media for Gallery",
           multiple: true,
-          library: { type: "image" },
+          library: { type: ["image", "video"] },
         })
 
         mediaUploader.on("select", function () {
@@ -436,27 +438,48 @@ jQuery(document).ready(function ($) {
           return
         }
 
-        // Use medium size for better aspect ratio display
-        const mediumSize = attachment.sizes && attachment.sizes.medium ? attachment.sizes.medium : attachment
+        const isVideo = attachment.type === "video"
+        let thumbUrl, thumbWidth, thumbHeight
+
+        if (isVideo) {
+          // Videos don't have image sizes — use the video URL directly
+          thumbUrl = attachment.url
+          thumbWidth = attachment.width || 640
+          thumbHeight = attachment.height || 360
+        } else {
+          // Use medium size for better aspect ratio display
+          const mediumSize = attachment.sizes && attachment.sizes.medium ? attachment.sizes.medium : attachment
+          thumbUrl = mediumSize.url
+          thumbWidth = mediumSize.width || attachment.width
+          thumbHeight = mediumSize.height || attachment.height
+        }
 
         const itemData = {
           id: attachment.id,
-          thumb: mediumSize.url,
-          width: mediumSize.width || attachment.width,
-          height: mediumSize.height || attachment.height,
+          thumb: thumbUrl,
+          type: isVideo ? "video" : "image",
+          width: thumbWidth,
+          height: thumbHeight,
           filename: attachment.filename || attachment.name || attachment.title || "Unknown filename",
         }
 
         const itemHtml = template(itemData)
         const $item = $(itemHtml)
 
-        // Add default size class
-        $item.addClass("size-regular")
+        // Add default size class (template already includes it, but ensure it's there)
+        if (!$item.hasClass("size-regular")) {
+          $item.addClass("size-regular")
+        }
 
         preview.append($item)
 
         // Get current masonry size and set active button
         galleryBuilder.loadMasonrySize(attachment.id)
+
+        // Load video settings if this is a video
+        if (isVideo) {
+          galleryBuilder.loadVideoSettings(attachment.id)
+        }
       })
 
       // Clear any active ordering buttons since we added new images
@@ -802,6 +825,59 @@ jQuery(document).ready(function ($) {
           }
         }
       )
+    },
+
+    // ===== Video Settings =====
+    loadExistingVideoSettings: function () {
+      $('#gallery-preview .gallery-item[data-type="video"]').each(function () {
+        const imageId = $(this).data("id")
+        if (imageId) {
+          galleryBuilder.loadVideoSettings(imageId)
+        }
+      })
+    },
+
+    loadVideoSettings: function (imageId) {
+      $.post(
+        clearph_admin.ajax_url,
+        {
+          action: "clearph_get_video_settings",
+          image_id: imageId,
+          nonce: clearph_admin.nonce,
+        },
+        function (response) {
+          if (response.success) {
+            const item = $('[data-id="' + imageId + '"]')
+            item.find(".video-autoplay-select").val(response.data.autoplay)
+            item.find(".video-badge-select").val(response.data.show_badge)
+          }
+        }
+      )
+    },
+
+    bindVideoSettings: function () {
+      $(document).on("change", ".video-autoplay-select, .video-badge-select", function () {
+        const item = $(this).closest(".gallery-item")
+        const imageId = item.data("id")
+        const autoplay = item.find(".video-autoplay-select").val()
+        const showBadge = item.find(".video-badge-select").val()
+
+        $.post(
+          clearph_admin.ajax_url,
+          {
+            action: "clearph_update_video_settings",
+            image_id: imageId,
+            autoplay: autoplay,
+            show_badge: showBadge,
+            nonce: clearph_admin.nonce,
+          },
+          function (response) {
+            if (!response.success) {
+              console.error("Failed to save video settings")
+            }
+          }
+        )
+      })
     },
 
     bindCategorySave: function () {

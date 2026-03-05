@@ -53,11 +53,16 @@ class ClearPH_Admin
         }
 ?>
         <script type="text/html" id="tmpl-gallery-item">
-            <div class="gallery-item size-regular" data-id="{{ data.id }}">
+            <div class="gallery-item size-regular" data-id="{{ data.id }}" data-type="{{ data.type }}">
                 <div class="image-container">
-                    <img src="{{ data.thumb }}" alt="">
+                    <# if ( data.type === 'video' ) { #>
+                        <video src="{{ data.thumb }}" muted preload="metadata"></video>
+                        <span class="video-badge">&#9654;</span>
+                    <# } else { #>
+                        <img src="{{ data.thumb }}" alt="">
+                    <# } #>
                 </div>
-                <button type="button" class="remove-item">×</button>
+                <button type="button" class="remove-item">&times;</button>
                 <div class="item-controls">
                     <div class="masonry-controls">
                         <button type="button" class="size-btn active" data-size="regular">R</button>
@@ -87,6 +92,25 @@ class ClearPH_Admin
                             Micro-columns (1 col = 2, 1.5 col = 3)
                         </div>
                     </div>
+                    <# if ( data.type === 'video' ) { #>
+                    <div class="video-settings-controls">
+                        <span class="video-settings-label">Video Settings</span>
+                        <label>
+                            Autoplay:
+                            <select class="video-autoplay-select">
+                                <option value="hover">On Hover</option>
+                                <option value="always">Always</option>
+                            </select>
+                        </label>
+                        <label>
+                            Play Badge:
+                            <select class="video-badge-select">
+                                <option value="yes">Show</option>
+                                <option value="no">Hide</option>
+                            </select>
+                        </label>
+                    </div>
+                    <# } #>
                     <div class="category-controls" style="margin-top: 8px;">
                         <select class="image-category-select" style="width: 90%; padding: 4px; font-size: 10px; border: 1px solid #fff; background: rgba(255,255,255,0.2); color: #fff; border-radius: 2px;">
                             <option value="">No Category</option>

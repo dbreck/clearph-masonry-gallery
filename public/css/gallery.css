@@ -339,6 +339,46 @@
     }
 }
 
+/* Video items */
+.clearph-gallery .gallery-item--video {
+    cursor: pointer;
+}
+
+.clearph-gallery .gallery-item--video video {
+    width: 100%;
+    height: 100%;
+    display: block;
+    object-fit: cover;
+}
+
+.clearph-gallery .gallery-video-badge {
+    position: absolute;
+    bottom: 12px;
+    left: 12px;
+    width: 36px;
+    height: 36px;
+    background: rgba(0, 0, 0, 0.6);
+    color: #fff;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    pointer-events: none;
+    transition: opacity 0.3s ease;
+    z-index: 2;
+    padding-left: 2px;
+}
+
+.clearph-gallery .gallery-item--video:hover .gallery-video-badge {
+    opacity: 0;
+}
+
+/* Video items should not get the image hover scale */
+.clearph-gallery .gallery-item--video:hover video {
+    transform: none;
+}
+
 /* Dark mode support */
 @media (prefers-color-scheme: dark) {
     .clearph-gallery .gallery-item.lightbox-clickable:hover::after {

@@ -13,6 +13,7 @@ jQuery(document).ready(function ($) {
 
     init() {
       this.setupLazyLoading()
+      this.setupVideoPlayback()
       this.initAnimations()
     }
 
@@ -69,6 +70,32 @@ jQuery(document).ready(function ($) {
       })
     }
 
+    setupVideoPlayback() {
+      const videoItems = this.gallery.find(".gallery-item--video")
+
+      videoItems.each((index, item) => {
+        const $item = $(item)
+        const video = $item.find("video")[0]
+        if (!video) return
+
+        const autoplayMode = video.getAttribute("data-autoplay") || "hover"
+
+        if (autoplayMode === "always") {
+          // Ensure autoplay starts (browsers may block it)
+          video.play().catch(() => {})
+        } else {
+          // Play on hover, pause on leave
+          $item.on("mouseenter", () => {
+            video.play().catch(() => {})
+          })
+
+          $item.on("mouseleave", () => {
+            video.pause()
+          })
+        }
+      })
+    }
+
     initAnimations() {
       // Check if GSAP is available
       if (typeof gsap !== "undefined") {
@@ -95,6 +122,10 @@ jQuery(document).ready(function ($) {
       // Optimized hover animations - use will-change and transform3d
       items.each((index, item) => {
         const $item = $(item)
+
+        // Skip hover-zoom for video items
+        if ($item.data("type") === "video") return
+
         const $img = $item.find("img")
 
         // Set up for hardware acceleration
@@ -105,8 +136,8 @@ jQuery(document).ready(function ($) {
 
         $item.on("mouseenter", () => {
           gsap.to($img, {
-            scale: 1.1, // Updated scale value
-            duration: 0.4, // Slower for smoother feel
+            scale: 1.1,
+            duration: 0.4,
             ease: "power2.out",
             force3D: true,
           })
@@ -115,7 +146,7 @@ jQuery(document).ready(function ($) {
         $item.on("mouseleave", () => {
           gsap.to($img, {
             scale: 1,
-            duration: 0.4, // Matching duration
+            duration: 0.4,
             ease: "power2.out",
             force3D: true,
           })

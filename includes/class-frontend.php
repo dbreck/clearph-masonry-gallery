@@ -41,7 +41,7 @@ class ClearPH_Frontend
         $images = get_post_meta($gallery_id, '_clearph_gallery_images', true);
 
         if (empty($images)) {
-            return '<p>No images in this gallery.</p>';
+            return '<p>No media in this gallery.</p>';
         }
 
         // Load frontend assets
@@ -84,14 +84,30 @@ class ClearPH_Frontend
             // Always use full-size images in the lightbox per requirement
             $lightbox_size = 'full';
             foreach ($images as $image_id) {
-                $full_image = wp_get_attachment_image_src($image_id, $lightbox_size);
+                $mime_type = get_post_mime_type($image_id);
+                $is_video = strpos($mime_type, 'video/') === 0;
                 $alt = get_post_meta($image_id, '_wp_attachment_image_alt', true);
-                if ($full_image) {
-                    $this->lightbox_data[$gallery_group][] = array(
-                        'id' => $image_id,
-                        'src' => $full_image[0],
-                        'caption' => $alt
-                    );
+
+                if ($is_video) {
+                    $video_url = wp_get_attachment_url($image_id);
+                    if ($video_url) {
+                        $this->lightbox_data[$gallery_group][] = array(
+                            'id' => $image_id,
+                            'src' => $video_url,
+                            'type' => 'video',
+                            'caption' => $alt
+                        );
+                    }
+                } else {
+                    $full_image = wp_get_attachment_image_src($image_id, $lightbox_size);
+                    if ($full_image) {
+                        $this->lightbox_data[$gallery_group][] = array(
+                            'id' => $image_id,
+                            'src' => $full_image[0],
+                            'type' => 'image',
+                            'caption' => $alt
+                        );
+                    }
                 }
             }
         }
@@ -161,6 +177,9 @@ class ClearPH_Frontend
 
     private function render_gallery_item($image_id, $settings, $gallery_group, $lightbox_enabled, $gallery_id)
     {
+        $mime_type = get_post_mime_type($image_id);
+        $is_video = strpos($mime_type, 'video/') === 0;
+
         // Check for new grid sizing format first
         $grid_sizing = get_post_meta($image_id, 'clearph_grid_sizing', true);
 
@@ -170,7 +189,6 @@ class ClearPH_Frontend
         $inline_style = '';
 
         if ($grid_sizing && isset($grid_sizing['column_span']) && isset($grid_sizing['row_span'])) {
-            // New grid sizing format - use inline styles
             $column_span = absint($grid_sizing['column_span']);
             $row_span = absint($grid_sizing['row_span']);
 
@@ -178,41 +196,33 @@ class ClearPH_Frontend
                 $inline_style = sprintf('grid-column: span %d; grid-row: span %d;', $column_span, $row_span);
             }
 
-            // Convert to legacy size name for image size selection
             $masonry_size = $this->convert_grid_to_legacy_size($column_span, $row_span);
         } else {
-            // Legacy masonry sizing format - use CSS classes
             $masonry_size = get_post_meta($image_id, 'clearph_masonry_sizing', true) ?: 'regular';
         }
 
-        $image_size = $this->get_image_size_for_masonry($masonry_size, $settings['image_size']);
         $alt = get_post_meta($image_id, '_wp_attachment_image_alt', true);
 
         // Get image category
         $image_categories = get_post_meta($gallery_id, '_clearph_image_categories', true);
         $category = isset($image_categories[$image_id]) ? $image_categories[$image_id] : '';
 
-        // Build classes - always include size class for backward compatibility
+        // Build classes
         $item_class = 'gallery-item size-' . $masonry_size;
+
+        if ($is_video) {
+            $item_class .= ' gallery-item--video';
+        }
 
         if ($lightbox_enabled) {
             $item_class .= ' lightbox-clickable';
         }
 
-        // Use wp_get_attachment_image for responsive images with srcset
-        $image_attrs = array(
-            'class' => 'lazy-image',
-            'style' => 'object-fit: ' . esc_attr($settings['object_fit']) . '; width: 100%; height: 100%; cursor: ' . ($lightbox_enabled ? 'pointer' : 'default') . ';',
-            'loading' => 'lazy',
-            'alt' => $alt,
-            'sizes' => $this->get_sizes_attribute_for_grid($column_span, $row_span, $masonry_size, $settings['columns'])
-        );
-
-        // Build item HTML with optional inline grid styles and data attributes
+        // Build item HTML
         $html = '<div class="' . esc_attr($item_class) . '"';
         $html .= ' data-image-id="' . esc_attr($image_id) . '"';
+        $html .= ' data-type="' . ($is_video ? 'video' : 'image') . '"';
 
-        // Add category data attribute if category is set
         if ($category) {
             $html .= ' data-category="' . esc_attr($category) . '"';
         }
@@ -227,7 +237,54 @@ class ClearPH_Frontend
         }
 
         $html .= '>';
-        $html .= wp_get_attachment_image($image_id, $image_size, false, $image_attrs);
+
+        if ($is_video) {
+            $video_url = wp_get_attachment_url($image_id);
+            $poster = '';
+            // Use featured image as poster if set on the video attachment
+            $poster_id = get_post_thumbnail_id($image_id);
+            if ($poster_id) {
+                $poster_src = wp_get_attachment_image_url($poster_id, 'large');
+                if ($poster_src) {
+                    $poster = $poster_src;
+                }
+            }
+
+            // Get per-video settings
+            $video_settings = get_post_meta($image_id, 'clearph_video_settings', true);
+            if (!$video_settings || !is_array($video_settings)) {
+                $video_settings = array('autoplay' => 'hover', 'show_badge' => 'yes');
+            }
+            $video_autoplay = isset($video_settings['autoplay']) ? $video_settings['autoplay'] : 'hover';
+            $video_show_badge = isset($video_settings['show_badge']) ? $video_settings['show_badge'] : 'yes';
+
+            $html .= '<video class="gallery-video" muted loop playsinline preload="metadata"';
+            $html .= ' data-autoplay="' . esc_attr($video_autoplay) . '"';
+            $html .= ' style="object-fit: ' . esc_attr($settings['object_fit']) . '; width: 100%; height: 100%;"';
+            if ($video_autoplay === 'always') {
+                $html .= ' autoplay';
+            }
+            if ($poster) {
+                $html .= ' poster="' . esc_url($poster) . '"';
+            }
+            $html .= '>';
+            $html .= '<source src="' . esc_url($video_url) . '" type="' . esc_attr($mime_type) . '">';
+            $html .= '</video>';
+            if ($video_show_badge === 'yes') {
+                $html .= '<span class="gallery-video-badge">&#9654;</span>';
+            }
+        } else {
+            $image_size = $this->get_image_size_for_masonry($masonry_size, $settings['image_size']);
+            $image_attrs = array(
+                'class' => 'lazy-image',
+                'style' => 'object-fit: ' . esc_attr($settings['object_fit']) . '; width: 100%; height: 100%; cursor: ' . ($lightbox_enabled ? 'pointer' : 'default') . ';',
+                'loading' => 'lazy',
+                'alt' => $alt,
+                'sizes' => $this->get_sizes_attribute_for_grid($column_span, $row_span, $masonry_size, $settings['columns'])
+            );
+            $html .= wp_get_attachment_image($image_id, $image_size, false, $image_attrs);
+        }
+
         $html .= '</div>';
 
         return $html;
@@ -308,6 +365,10 @@ class ClearPH_Frontend
                 $('.lightbox-clickable').on('click', function(e) {
                     e.preventDefault();
 
+                    // Pause any playing video in the gallery item
+                    var video = $(this).find('video')[0];
+                    if (video) video.pause();
+
                     const galleryGroup = $(this).closest('.clearph-gallery').data('gallery-group');
                     const imageId = $(this).data('image-id');
                     const lightboxData = window.clearphLightboxData[galleryGroup];
@@ -331,6 +392,13 @@ class ClearPH_Frontend
 
                     // Open FancyBox
                     $.fancybox.open(lightboxData.map(function(item) {
+                        if (item.type === 'video') {
+                            return {
+                                src: '<video controls autoplay style="max-width:100%;max-height:80vh;"><source src="' + item.src + '"></video>',
+                                type: 'html',
+                                caption: item.caption || ''
+                            };
+                        }
                         return {
                             src: item.src,
                             type: 'image',

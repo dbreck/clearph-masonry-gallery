@@ -8,6 +8,8 @@ class ClearPH_Media_Handler {
         add_action('wp_ajax_clearph_update_grid_sizing', array($this, 'update_grid_sizing'));
         add_action('wp_ajax_clearph_get_grid_sizing', array($this, 'get_grid_sizing'));
         add_action('wp_ajax_clearph_get_image_categories', array($this, 'get_image_categories'));
+        add_action('wp_ajax_clearph_update_video_settings', array($this, 'update_video_settings'));
+        add_action('wp_ajax_clearph_get_video_settings', array($this, 'get_video_settings'));
     }
 
     /**
@@ -167,5 +169,64 @@ class ClearPH_Media_Handler {
         }
 
         wp_send_json_success($image_categories);
+    }
+
+    /**
+     * Update video-specific settings per attachment
+     */
+    public function update_video_settings() {
+        check_ajax_referer('clearph_gallery_nonce', 'nonce');
+
+        $image_id = absint($_POST['image_id']);
+        if (!$image_id) {
+            wp_send_json_error('Invalid attachment ID');
+        }
+
+        $autoplay = isset($_POST['autoplay']) ? sanitize_text_field($_POST['autoplay']) : 'hover';
+        $show_badge = isset($_POST['show_badge']) ? sanitize_text_field($_POST['show_badge']) : 'yes';
+
+        // Validate
+        if (!in_array($autoplay, array('hover', 'always'), true)) {
+            $autoplay = 'hover';
+        }
+        if (!in_array($show_badge, array('yes', 'no'), true)) {
+            $show_badge = 'yes';
+        }
+
+        $video_settings = array(
+            'autoplay' => $autoplay,
+            'show_badge' => $show_badge
+        );
+
+        update_post_meta($image_id, 'clearph_video_settings', $video_settings);
+
+        wp_send_json_success(array(
+            'image_id' => $image_id,
+            'autoplay' => $autoplay,
+            'show_badge' => $show_badge
+        ));
+    }
+
+    /**
+     * Get video-specific settings for an attachment
+     */
+    public function get_video_settings() {
+        check_ajax_referer('clearph_gallery_nonce', 'nonce');
+
+        $image_id = absint($_POST['image_id']);
+        if (!$image_id) {
+            wp_send_json_error('Invalid attachment ID');
+        }
+
+        $video_settings = get_post_meta($image_id, 'clearph_video_settings', true);
+        if (!$video_settings || !is_array($video_settings)) {
+            $video_settings = array('autoplay' => 'hover', 'show_badge' => 'yes');
+        }
+
+        wp_send_json_success(array(
+            'image_id' => $image_id,
+            'autoplay' => $video_settings['autoplay'],
+            'show_badge' => $video_settings['show_badge']
+        ));
     }
 }

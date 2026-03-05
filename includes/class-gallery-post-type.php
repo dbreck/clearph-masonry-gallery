@@ -291,24 +291,88 @@ class ClearPH_Gallery_Post_Type
 
     private function render_image_item($image_id)
     {
-        $image = wp_get_attachment_image_src($image_id, 'medium');
-        $masonry_size = get_post_meta($image_id, 'clearph_masonry_sizing', true) ?: 'regular';
-
-        if (!$image) return;
-
-        // Get attachment data for filename
         $attachment = get_post($image_id);
-        $filename = $attachment ? basename(get_attached_file($image_id)) : 'Unknown filename';
+        if (!$attachment) return;
 
-        // Calculate aspect ratio for proper display
-        $width = $image[1];
-        $height = $image[2];
+        $mime_type = get_post_mime_type($image_id);
+        $is_video = strpos($mime_type, 'video/') === 0;
+        $masonry_size = get_post_meta($image_id, 'clearph_masonry_sizing', true) ?: 'regular';
+        $filename = basename(get_attached_file($image_id));
+
+        if ($is_video) {
+            $video_url = wp_get_attachment_url($image_id);
+            if (!$video_url) return;
     ?>
-        <div class="gallery-item size-<?php echo esc_attr($masonry_size); ?>" data-id="<?php echo $image_id; ?>">
+        <div class="gallery-item size-<?php echo esc_attr($masonry_size); ?>" data-id="<?php echo $image_id; ?>" data-type="video">
+            <div class="image-container">
+                <video src="<?php echo esc_url($video_url); ?>" muted preload="metadata"></video>
+                <span class="video-badge">&#9654;</span>
+            </div>
+            <button type="button" class="remove-item">&times;</button>
+            <div class="item-controls">
+                <div class="masonry-controls">
+                    <button type="button" class="size-btn <?php echo $masonry_size === 'regular' ? 'active' : ''; ?>" data-size="regular">R</button>
+                    <button type="button" class="size-btn <?php echo $masonry_size === 'tall' ? 'active' : ''; ?>" data-size="tall">T</button>
+                    <button type="button" class="size-btn <?php echo $masonry_size === 'wide' ? 'active' : ''; ?>" data-size="wide">W</button>
+                    <button type="button" class="size-btn <?php echo $masonry_size === 'large' ? 'active' : ''; ?>" data-size="large">L</button>
+                    <button type="button" class="size-btn <?php echo $masonry_size === 'xl' ? 'active' : ''; ?>" data-size="xl">XL</button>
+                </div>
+                <div class="grid-sizing-controls" style="margin-top: 8px;">
+                    <div style="display: flex; gap: 8px; align-items: center; justify-content: center;">
+                        <label style="display: flex; flex-direction: column; align-items: center; gap: 2px;">
+                            <span style="font-size: 9px; color: #fff; opacity: 0.8;">Width</span>
+                            <input type="number" class="grid-column-input" min="1" max="12" value="2"
+                                   style="width: 40px; height: 24px; text-align: center; font-size: 11px; border: 1px solid #fff; background: rgba(255,255,255,0.2); color: #fff; border-radius: 2px;" />
+                        </label>
+                        <label style="display: flex; flex-direction: column; align-items: center; gap: 2px;">
+                            <span style="font-size: 9px; color: #fff; opacity: 0.8;">Height</span>
+                            <input type="number" class="grid-row-input" min="1" max="12" value="2"
+                                   style="width: 40px; height: 24px; text-align: center; font-size: 11px; border: 1px solid #fff; background: rgba(255,255,255,0.2); color: #fff; border-radius: 2px;" />
+                        </label>
+                        <button type="button" class="grid-apply-btn"
+                                style="height: 24px; padding: 0 8px; font-size: 10px; background: #0073aa; color: #fff; border: 1px solid #fff; border-radius: 2px; cursor: pointer;">
+                            Apply
+                        </button>
+                    </div>
+                    <div style="font-size: 8px; color: #fff; opacity: 0.7; margin-top: 4px; text-align: center;">
+                        Micro-columns (1 col = 2, 1.5 col = 3)
+                    </div>
+                </div>
+                <div class="video-settings-controls">
+                    <span class="video-settings-label">Video Settings</span>
+                    <label>
+                        Autoplay:
+                        <select class="video-autoplay-select">
+                            <option value="hover">On Hover</option>
+                            <option value="always">Always</option>
+                        </select>
+                    </label>
+                    <label>
+                        Play Badge:
+                        <select class="video-badge-select">
+                            <option value="yes">Show</option>
+                            <option value="no">Hide</option>
+                        </select>
+                    </label>
+                </div>
+                <div class="category-controls" style="margin-top: 8px;">
+                    <select class="image-category-select" style="width: 90%; padding: 4px; font-size: 10px; border: 1px solid #fff; background: rgba(255,255,255,0.2); color: #fff; border-radius: 2px;">
+                        <option value="">No Category</option>
+                    </select>
+                </div>
+                <div class="image-filename"><?php echo esc_html($filename); ?></div>
+            </div>
+        </div>
+    <?php
+        } else {
+            $image = wp_get_attachment_image_src($image_id, 'medium');
+            if (!$image) return;
+    ?>
+        <div class="gallery-item size-<?php echo esc_attr($masonry_size); ?>" data-id="<?php echo $image_id; ?>" data-type="image">
             <div class="image-container">
                 <img src="<?php echo $image[0]; ?>" alt="">
             </div>
-            <button type="button" class="remove-item">×</button>
+            <button type="button" class="remove-item">&times;</button>
             <div class="item-controls">
                 <div class="masonry-controls">
                     <button type="button" class="size-btn <?php echo $masonry_size === 'regular' ? 'active' : ''; ?>" data-size="regular">R</button>
@@ -346,7 +410,8 @@ class ClearPH_Gallery_Post_Type
                 <div class="image-filename"><?php echo esc_html($filename); ?></div>
             </div>
         </div>
-<?php
+    <?php
+        }
     }
 
     public function save_gallery_meta($post_id)
