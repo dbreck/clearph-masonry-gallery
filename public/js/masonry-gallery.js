@@ -248,6 +248,20 @@ jQuery(document).ready(function ($) {
     $(".clearph-gallery").each(function () {
       new ClearPHGallery(this)
     })
+
+    // Pre-filter from URL: ?filter=CategoryName or #filter-CategoryName
+    var preFilter =
+      new URLSearchParams(window.location.search).get("filter") ||
+      (window.location.hash.match(/^#filter-(.+)/) || [])[1]
+    if (preFilter) {
+      preFilter = decodeURIComponent(preFilter)
+      $(".clearph-gallery-filters .filter-btn").each(function () {
+        if ($(this).data("filter") === preFilter) {
+          $(this).trigger("click")
+          return false
+        }
+      })
+    }
   }, 100)
 
   // Category filtering

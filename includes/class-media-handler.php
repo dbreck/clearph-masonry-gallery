@@ -172,6 +172,41 @@ class ClearPH_Media_Handler {
     }
 
     /**
+     * Extract YouTube video ID from various URL formats
+     *
+     * Supports: youtube.com/watch?v=, youtu.be/, youtube.com/shorts/, youtube.com/embed/
+     *
+     * @param string $url YouTube URL
+     * @return string|false Video ID or false if not a valid YouTube URL
+     */
+    public static function extract_youtube_video_id($url) {
+        $patterns = array(
+            '/(?:youtube\.com\/watch\?.*v=|youtube\.com\/watch\?.+&v=)([a-zA-Z0-9_-]{11})/',
+            '/youtu\.be\/([a-zA-Z0-9_-]{11})/',
+            '/youtube\.com\/shorts\/([a-zA-Z0-9_-]{11})/',
+            '/youtube\.com\/embed\/([a-zA-Z0-9_-]{11})/',
+        );
+
+        foreach ($patterns as $pattern) {
+            if (preg_match($pattern, $url, $matches)) {
+                return $matches[1];
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Check if a YouTube URL is a Shorts URL
+     *
+     * @param string $url YouTube URL
+     * @return bool
+     */
+    public static function is_youtube_short($url) {
+        return (bool) preg_match('/youtube\.com\/shorts\//', $url);
+    }
+
+    /**
      * Update video-specific settings per attachment
      */
     public function update_video_settings() {

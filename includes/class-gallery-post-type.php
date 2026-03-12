@@ -221,8 +221,12 @@ class ClearPH_Gallery_Post_Type
     {
         $images = get_post_meta($post->ID, '_clearph_gallery_images', true);
         $settings = get_post_meta($post->ID, '_clearph_gallery_settings', true);
+        $youtube_items = get_post_meta($post->ID, '_clearph_youtube_items', true);
+        $youtube_sizing = get_post_meta($post->ID, '_clearph_youtube_sizing', true);
 
         if (!$images) $images = array();
+        if (!$youtube_items || !is_array($youtube_items)) $youtube_items = array();
+        if (!$youtube_sizing || !is_array($youtube_sizing)) $youtube_sizing = array();
 
         $defaults = array(
             'masonry_enabled' => true,
@@ -239,6 +243,7 @@ class ClearPH_Gallery_Post_Type
         <div id="gallery-builder">
             <div class="gallery-actions">
                 <button type="button" class="button" id="add-images">Add Images</button>
+                <button type="button" class="button" id="add-youtube">Add YouTube Video</button>
                 <button type="button" class="button" id="clear-gallery">Clear All</button>
 
                 <div class="gallery-ordering-controls">
@@ -270,8 +275,14 @@ class ClearPH_Gallery_Post_Type
             </div>
             <div id="gallery-preview" class="<?php echo esc_attr($gallery_classes); ?>">
                 <?php if (!empty($images)): ?>
-                    <?php foreach ($images as $image_id): ?>
-                        <?php $this->render_image_item($image_id); ?>
+                    <?php foreach ($images as $item_id): ?>
+                        <?php
+                        if (is_string($item_id) && strpos($item_id, 'yt_') === 0) {
+                            $this->render_youtube_item($item_id, $youtube_items, $youtube_sizing);
+                        } else {
+                            $this->render_image_item($item_id);
+                        }
+                        ?>
                     <?php endforeach; ?>
                 <?php endif; ?>
             </div>
@@ -285,6 +296,79 @@ class ClearPH_Gallery_Post_Type
             </div>
             <input type="hidden" id="gallery_images" name="gallery_images" value="<?php echo esc_attr(implode(',', $images)); ?>">
             <input type="hidden" id="image_categories" name="image_categories" value="">
+            <input type="hidden" id="youtube_items" name="youtube_items" value="<?php echo esc_attr(wp_json_encode($youtube_items ?: new stdClass())); ?>">
+            <input type="hidden" id="youtube_sizing" name="youtube_sizing" value="<?php echo esc_attr(wp_json_encode($youtube_sizing ?: new stdClass())); ?>">
+        </div>
+    <?php
+    }
+
+    private function render_youtube_item($yt_id, $youtube_items, $youtube_sizing)
+    {
+        $video_id = substr($yt_id, 3); // Strip 'yt_' prefix
+        $meta = isset($youtube_items[$yt_id]) ? $youtube_items[$yt_id] : array();
+        $sizing = isset($youtube_sizing[$yt_id]) ? $youtube_sizing[$yt_id] : array();
+
+        $url = isset($meta['url']) ? $meta['url'] : '';
+        $is_short = isset($meta['is_short']) ? $meta['is_short'] : false;
+
+        $masonry_size = isset($sizing['masonry_size']) ? $sizing['masonry_size'] : ($is_short ? 'tall' : 'regular');
+        $column_span = isset($sizing['column_span']) ? $sizing['column_span'] : '';
+        $row_span = isset($sizing['row_span']) ? $sizing['row_span'] : '';
+
+        $thumb_url = 'https://img.youtube.com/vi/' . esc_attr($video_id) . '/hqdefault.jpg';
+    ?>
+        <div class="gallery-item size-<?php echo esc_attr($masonry_size); ?>" data-id="<?php echo esc_attr($yt_id); ?>" data-type="youtube"<?php
+            if ($column_span && $row_span) {
+                echo ' style="grid-column: span ' . absint($column_span) . '; grid-row: span ' . absint($row_span) . ';"';
+            }
+        ?>>
+            <div class="image-container">
+                <img src="<?php echo esc_url($thumb_url); ?>" alt="YouTube video">
+                <span class="youtube-badge">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="white"><path d="M10 8.64L15.27 12 10 15.36V8.64M8 5v14l11-7L8 5z"/></svg>
+                </span>
+            </div>
+            <button type="button" class="remove-item">&times;</button>
+            <div class="item-controls">
+                <div class="masonry-controls">
+                    <button type="button" class="size-btn <?php echo $masonry_size === 'regular' ? 'active' : ''; ?>" data-size="regular">R</button>
+                    <button type="button" class="size-btn <?php echo $masonry_size === 'tall' ? 'active' : ''; ?>" data-size="tall">T</button>
+                    <button type="button" class="size-btn <?php echo $masonry_size === 'wide' ? 'active' : ''; ?>" data-size="wide">W</button>
+                    <button type="button" class="size-btn <?php echo $masonry_size === 'large' ? 'active' : ''; ?>" data-size="large">L</button>
+                    <button type="button" class="size-btn <?php echo $masonry_size === 'xl' ? 'active' : ''; ?>" data-size="xl">XL</button>
+                </div>
+                <div class="grid-sizing-controls" style="margin-top: 8px;">
+                    <div style="display: flex; gap: 8px; align-items: center; justify-content: center;">
+                        <label style="display: flex; flex-direction: column; align-items: center; gap: 2px;">
+                            <span style="font-size: 9px; color: #fff; opacity: 0.8;">Width</span>
+                            <input type="number" class="grid-column-input" min="1" max="12" value="<?php echo $column_span ? absint($column_span) : 2; ?>"
+                                   style="width: 40px; height: 24px; text-align: center; font-size: 11px; border: 1px solid #fff; background: rgba(255,255,255,0.2); color: #fff; border-radius: 2px;" />
+                        </label>
+                        <label style="display: flex; flex-direction: column; align-items: center; gap: 2px;">
+                            <span style="font-size: 9px; color: #fff; opacity: 0.8;">Height</span>
+                            <input type="number" class="grid-row-input" min="1" max="12" value="<?php echo $row_span ? absint($row_span) : 2; ?>"
+                                   style="width: 40px; height: 24px; text-align: center; font-size: 11px; border: 1px solid #fff; background: rgba(255,255,255,0.2); color: #fff; border-radius: 2px;" />
+                        </label>
+                        <button type="button" class="grid-apply-btn"
+                                style="height: 24px; padding: 0 8px; font-size: 10px; background: #0073aa; color: #fff; border: 1px solid #fff; border-radius: 2px; cursor: pointer;">
+                            Apply
+                        </button>
+                    </div>
+                    <div style="font-size: 8px; color: #fff; opacity: 0.7; margin-top: 4px; text-align: center;">
+                        Micro-columns (1 col = 2, 1.5 col = 3)
+                    </div>
+                </div>
+                <div class="youtube-url-controls" style="margin-top: 8px;">
+                    <input type="text" class="youtube-url-input" value="<?php echo esc_attr($url); ?>" placeholder="YouTube URL"
+                           style="width: 90%; padding: 4px; font-size: 10px; border: 1px solid #fff; background: rgba(255,255,255,0.2); color: #fff; border-radius: 2px;" />
+                </div>
+                <div class="category-controls" style="margin-top: 8px;">
+                    <select class="image-category-select" style="width: 90%; padding: 4px; font-size: 10px; border: 1px solid #fff; background: rgba(255,255,255,0.2); color: #fff; border-radius: 2px;">
+                        <option value="">No Category</option>
+                    </select>
+                </div>
+                <div class="image-filename">YouTube: <?php echo esc_html($video_id); ?></div>
+            </div>
         </div>
     <?php
     }
@@ -454,10 +538,62 @@ class ClearPH_Gallery_Post_Type
             update_post_meta($post_id, '_clearph_image_categories', $image_categories);
         }
 
-        // Save images
+        // Save images (mixed: integer attachment IDs + yt_ YouTube placeholders)
         if (isset($_POST['gallery_images'])) {
-            $images = array_filter(array_map('absint', explode(',', $_POST['gallery_images'])));
+            $raw_items = explode(',', $_POST['gallery_images']);
+            $images = array();
+            foreach ($raw_items as $item) {
+                $item = trim($item);
+                if (strpos($item, 'yt_') === 0) {
+                    // YouTube placeholder - sanitize the video ID portion
+                    $video_id = preg_replace('/[^a-zA-Z0-9_-]/', '', substr($item, 3));
+                    if ($video_id) {
+                        $images[] = 'yt_' . $video_id;
+                    }
+                } else {
+                    $int_val = absint($item);
+                    if ($int_val) {
+                        $images[] = $int_val;
+                    }
+                }
+            }
             update_post_meta($post_id, '_clearph_gallery_images', $images);
+        }
+
+        // Save YouTube items metadata
+        if (isset($_POST['youtube_items'])) {
+            $youtube_items = json_decode(stripslashes($_POST['youtube_items']), true);
+            if (is_array($youtube_items)) {
+                $sanitized = array();
+                foreach ($youtube_items as $yt_id => $meta) {
+                    $yt_id = sanitize_text_field($yt_id);
+                    if (strpos($yt_id, 'yt_') !== 0) continue;
+                    $sanitized[$yt_id] = array(
+                        'video_id' => sanitize_text_field(isset($meta['video_id']) ? $meta['video_id'] : ''),
+                        'url' => esc_url_raw(isset($meta['url']) ? $meta['url'] : ''),
+                        'is_short' => !empty($meta['is_short']),
+                    );
+                }
+                update_post_meta($post_id, '_clearph_youtube_items', $sanitized);
+            }
+        }
+
+        // Save YouTube sizing
+        if (isset($_POST['youtube_sizing'])) {
+            $youtube_sizing = json_decode(stripslashes($_POST['youtube_sizing']), true);
+            if (is_array($youtube_sizing)) {
+                $sanitized = array();
+                foreach ($youtube_sizing as $yt_id => $sizing) {
+                    $yt_id = sanitize_text_field($yt_id);
+                    if (strpos($yt_id, 'yt_') !== 0) continue;
+                    $sanitized[$yt_id] = array(
+                        'column_span' => absint(isset($sizing['column_span']) ? $sizing['column_span'] : 2),
+                        'row_span' => absint(isset($sizing['row_span']) ? $sizing['row_span'] : 2),
+                        'masonry_size' => sanitize_text_field(isset($sizing['masonry_size']) ? $sizing['masonry_size'] : 'regular'),
+                    );
+                }
+                update_post_meta($post_id, '_clearph_youtube_sizing', $sanitized);
+            }
         }
 
         // Debug log

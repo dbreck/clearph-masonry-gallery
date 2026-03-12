@@ -21,6 +21,7 @@ jQuery(document).ready(function ($) {
       this.loadImageCategories() // Load existing category assignments
       this.bindCategorySave() // Bind category save on post save
       this.bindVideoSettings() // Bind video settings change handlers
+      this.loadYouTubeSizingFromHidden() // Load YouTube sizing from hidden fields
     },
 
     initSortable: function () {
@@ -39,10 +40,12 @@ jQuery(document).ready(function ($) {
 
     bindEvents: function () {
       $("#add-images").on("click", this.openMediaUploader)
+      $("#add-youtube").on("click", this.addYouTubeVideo)
       $("#clear-gallery").on("click", this.clearGallery)
       $(document).on("click", ".remove-item", this.removeItem)
       $(document).on("click", ".size-btn", this.updateMasonrySize)
       $(document).on("click", ".grid-apply-btn", this.applyGridSizing)
+      $(document).on("change", ".youtube-url-input", this.updateYouTubeUrl)
       $(document).on("click", ".copy-shortcode", this.copyShortcode)
 
       // Ordering controls
@@ -148,10 +151,10 @@ jQuery(document).ready(function ($) {
     },
 
     loadExistingImageSizing: function () {
-      // Load grid sizing for all existing images on page load
+      // Load grid sizing for all existing images on page load (skip YouTube items)
       $("#gallery-preview .gallery-item").each(function () {
         const imageId = $(this).data("id")
-        if (imageId) {
+        if (imageId && String(imageId).indexOf("yt_") !== 0) {
           galleryBuilder.loadMasonrySize(imageId)
         }
       })
@@ -488,6 +491,9 @@ jQuery(document).ready(function ($) {
     },
 
     loadMasonrySize: function (imageId) {
+      // YouTube items load from hidden field, not AJAX
+      if (String(imageId).indexOf("yt_") === 0) return
+
       // Try to load new grid sizing format first
       $.post(
         clearph_admin.ajax_url,
@@ -531,7 +537,13 @@ jQuery(document).ready(function ($) {
     removeItem: function (e) {
       e.preventDefault()
       galleryBuilder.saveCurrentOrder()
-      $(this).closest(".gallery-item").remove()
+      const item = $(this).closest(".gallery-item")
+      const itemId = String(item.data("id"))
+      // Clean up YouTube data if it's a YouTube item
+      if (itemId.indexOf("yt_") === 0) {
+        galleryBuilder.removeYouTubeData(itemId)
+      }
+      item.remove()
       galleryBuilder.clearActiveOrderingButtons()
       galleryBuilder.updateImageOrder()
     },
@@ -540,8 +552,24 @@ jQuery(document).ready(function ($) {
       e.preventDefault()
       const btn = $(this)
       const item = btn.closest(".gallery-item")
-      const imageId = item.data("id")
+      const imageId = String(item.data("id"))
       const size = btn.data("size")
+
+      // YouTube items: save to hidden field, no AJAX
+      if (imageId.indexOf("yt_") === 0) {
+        item.removeClass("size-regular size-tall size-wide size-large size-xl")
+        item.addClass("size-" + size)
+        item.find(".size-btn").removeClass("active")
+        btn.addClass("active")
+        item.css({ "grid-column": "", "grid-row": "" }) // Clear inline styles so CSS class takes over
+        galleryBuilder.syncGridInputsFromSize(item, size)
+        galleryBuilder.updateYouTubeSizing(imageId, {
+          masonry_size: size,
+          column_span: parseInt(item.find(".grid-column-input").val()) || 2,
+          row_span: parseInt(item.find(".grid-row-input").val()) || 2,
+        })
+        return
+      }
 
       $.post(
         clearph_admin.ajax_url,
@@ -572,7 +600,7 @@ jQuery(document).ready(function ($) {
       e.preventDefault()
       const btn = $(this)
       const item = btn.closest(".gallery-item")
-      const imageId = item.data("id")
+      const imageId = String(item.data("id"))
       const columnSpan = parseInt(item.find(".grid-column-input").val()) || 2
       const rowSpan = parseInt(item.find(".grid-row-input").val()) || 2
 
@@ -583,6 +611,25 @@ jQuery(document).ready(function ($) {
       }
       if (rowSpan < 1 || rowSpan > 12) {
         alert("Height must be between 1 and 12 rows")
+        return
+      }
+
+      // YouTube items: save to hidden field, no AJAX
+      if (imageId.indexOf("yt_") === 0) {
+        item.css({
+          "grid-column": "span " + columnSpan,
+          "grid-row": "span " + rowSpan,
+        })
+        item.find(".size-btn").removeClass("active")
+        galleryBuilder.updateYouTubeSizing(imageId, {
+          column_span: columnSpan,
+          row_span: rowSpan,
+          masonry_size: "custom",
+        })
+        btn.text("\u2713").css("background", "#46b450")
+        setTimeout(function () {
+          btn.text("Apply").css("background", "#0073aa")
+        }, 1000)
         return
       }
 
@@ -607,7 +654,7 @@ jQuery(document).ready(function ($) {
             item.find(".size-btn").removeClass("active")
 
             // Visual feedback
-            btn.text("✓").css("background", "#46b450")
+            btn.text("\u2713").css("background", "#46b450")
             setTimeout(function () {
               btn.text("Apply").css("background", "#0073aa")
             }, 1000)
@@ -636,9 +683,12 @@ jQuery(document).ready(function ($) {
 
     clearGallery: function (e) {
       e.preventDefault()
-      if (confirm("Remove all images from this gallery?")) {
+      if (confirm("Remove all items from this gallery?")) {
         galleryBuilder.saveCurrentOrder()
         $("#gallery-preview").empty()
+        // Clear YouTube hidden fields
+        $("#youtube_items").val("{}")
+        $("#youtube_sizing").val("{}")
         galleryBuilder.clearActiveOrderingButtons()
         galleryBuilder.updateImageOrder()
       }
@@ -878,6 +928,187 @@ jQuery(document).ready(function ($) {
           }
         )
       })
+    },
+
+    // ===== YouTube Management =====
+    extractYouTubeId: function (url) {
+      var patterns = [
+        /(?:youtube\.com\/watch\?.*v=|youtube\.com\/watch\?.+&v=)([a-zA-Z0-9_-]{11})/,
+        /youtu\.be\/([a-zA-Z0-9_-]{11})/,
+        /youtube\.com\/shorts\/([a-zA-Z0-9_-]{11})/,
+        /youtube\.com\/embed\/([a-zA-Z0-9_-]{11})/,
+      ]
+      for (var i = 0; i < patterns.length; i++) {
+        var match = url.match(patterns[i])
+        if (match) return match[1]
+      }
+      return null
+    },
+
+    isYouTubeShort: function (url) {
+      return /youtube\.com\/shorts\//.test(url)
+    },
+
+    addYouTubeVideo: function (e) {
+      e.preventDefault()
+      var url = prompt("Enter a YouTube video URL:")
+      if (!url) return
+
+      var videoId = galleryBuilder.extractYouTubeId(url)
+      if (!videoId) {
+        alert("Could not parse a YouTube video ID from that URL. Supported formats: youtube.com/watch?v=, youtu.be/, youtube.com/shorts/, youtube.com/embed/")
+        return
+      }
+
+      var ytId = "yt_" + videoId
+      var preview = $("#gallery-preview")
+
+      // Skip if already in gallery
+      if (preview.find('[data-id="' + ytId + '"]').length) {
+        alert("This YouTube video is already in the gallery.")
+        return
+      }
+
+      galleryBuilder.saveCurrentOrder()
+
+      var isShort = galleryBuilder.isYouTubeShort(url)
+      var defaultSize = isShort ? "tall" : "regular"
+      var sizeMap = {
+        regular: { column: 2, row: 2 },
+        tall: { column: 2, row: 4 },
+      }
+      var defaultSizing = sizeMap[defaultSize] || sizeMap.regular
+
+      var template = wp.template("youtube-item")
+      var itemData = {
+        yt_id: ytId,
+        video_id: videoId,
+        url: url,
+        thumb: "https://img.youtube.com/vi/" + videoId + "/hqdefault.jpg",
+        masonry_size: defaultSize,
+        column_span: defaultSizing.column,
+        row_span: defaultSizing.row,
+      }
+
+      var itemHtml = template(itemData)
+      preview.append(itemHtml)
+
+      // Store YouTube data in hidden fields
+      galleryBuilder.updateYouTubeData(ytId, {
+        video_id: videoId,
+        url: url,
+        is_short: isShort,
+      })
+      galleryBuilder.updateYouTubeSizing(ytId, {
+        column_span: defaultSizing.column,
+        row_span: defaultSizing.row,
+        masonry_size: defaultSize,
+      })
+
+      // Populate category dropdown for the new item
+      galleryBuilder.populateCategoryDropdowns()
+
+      galleryBuilder.clearActiveOrderingButtons()
+      galleryBuilder.updateImageOrder()
+    },
+
+    getYouTubeItems: function () {
+      var raw = JSON.parse($("#youtube_items").val() || "{}")
+      return Array.isArray(raw) ? {} : raw
+    },
+
+    getYouTubeSizing: function () {
+      var raw = JSON.parse($("#youtube_sizing").val() || "{}")
+      return Array.isArray(raw) ? {} : raw
+    },
+
+    updateYouTubeData: function (ytId, data) {
+      var items = this.getYouTubeItems()
+      items[ytId] = data
+      $("#youtube_items").val(JSON.stringify(items))
+    },
+
+    updateYouTubeSizing: function (ytId, sizing) {
+      var data = this.getYouTubeSizing()
+      data[ytId] = sizing
+      $("#youtube_sizing").val(JSON.stringify(data))
+    },
+
+    removeYouTubeData: function (ytId) {
+      var items = this.getYouTubeItems()
+      delete items[ytId]
+      $("#youtube_items").val(JSON.stringify(items))
+
+      var sizing = this.getYouTubeSizing()
+      delete sizing[ytId]
+      $("#youtube_sizing").val(JSON.stringify(sizing))
+    },
+
+    loadYouTubeSizingFromHidden: function () {
+      var sizing = this.getYouTubeSizing()
+      Object.keys(sizing).forEach(function (ytId) {
+        var item = $('[data-id="' + ytId + '"]')
+        if (!item.length) return
+        var s = sizing[ytId]
+        if (s.column_span && s.row_span) {
+          item.find(".grid-column-input").val(s.column_span)
+          item.find(".grid-row-input").val(s.row_span)
+        }
+      })
+    },
+
+    updateYouTubeUrl: function () {
+      var $input = $(this)
+      var item = $input.closest(".gallery-item")
+      var oldId = String(item.data("id"))
+      var newUrl = $input.val().trim()
+
+      if (!newUrl) return
+
+      var newVideoId = galleryBuilder.extractYouTubeId(newUrl)
+      if (!newVideoId) {
+        alert("Could not parse a YouTube video ID from that URL.")
+        $input.val(item.find(".image-filename").text().replace("YouTube: ", ""))
+        return
+      }
+
+      var newYtId = "yt_" + newVideoId
+      var isShort = galleryBuilder.isYouTubeShort(newUrl)
+
+      // Update thumbnail
+      item.find(".image-container img").attr("src", "https://img.youtube.com/vi/" + newVideoId + "/hqdefault.jpg")
+      item.find(".image-filename").text("YouTube: " + newVideoId)
+
+      // If video ID changed, update data-id and hidden fields
+      if (newYtId !== oldId) {
+        // Remove old data
+        galleryBuilder.removeYouTubeData(oldId)
+
+        // Update DOM
+        item.attr("data-id", newYtId).data("id", newYtId)
+
+        // Preserve existing sizing
+        var columnSpan = parseInt(item.find(".grid-column-input").val()) || 2
+        var rowSpan = parseInt(item.find(".grid-row-input").val()) || 2
+        var sizeClass = (item.attr("class") || "").match(/size-(regular|tall|wide|large|xl)/)
+        var masonrySize = sizeClass ? sizeClass[1] : "regular"
+
+        galleryBuilder.updateYouTubeSizing(newYtId, {
+          column_span: columnSpan,
+          row_span: rowSpan,
+          masonry_size: masonrySize,
+        })
+      }
+
+      // Update YouTube data
+      galleryBuilder.updateYouTubeData(newYtId, {
+        video_id: newVideoId,
+        url: newUrl,
+        is_short: isShort,
+      })
+
+      // Update image order to reflect any ID change
+      galleryBuilder.updateImageOrder()
     },
 
     bindCategorySave: function () {

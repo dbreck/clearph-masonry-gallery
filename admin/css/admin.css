@@ -556,3 +556,40 @@
     letter-spacing: 0.5px;
     margin-bottom: 2px;
 }
+
+/* YouTube items in admin builder */
+.gallery-item .youtube-badge {
+    position: absolute;
+    bottom: 8px;
+    left: 8px;
+    width: 28px;
+    height: 28px;
+    background: rgba(255, 0, 0, 0.85);
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+    z-index: 2;
+    transition: opacity 0.2s ease;
+}
+
+.gallery-item:hover .youtube-badge {
+    opacity: 0;
+}
+
+.gallery-item .youtube-url-controls input {
+    font-family: monospace;
+}
+
+#add-youtube {
+    background: #ff0000;
+    border-color: #cc0000;
+    color: #fff;
+}
+
+#add-youtube:hover {
+    background: #cc0000;
+    border-color: #990000;
+    color: #fff;
+}

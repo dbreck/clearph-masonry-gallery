@@ -64,6 +64,12 @@ class ClearPH_Frontend
         );
         $settings = wp_parse_args($settings, $defaults);
 
+        // Load YouTube meta
+        $youtube_items = get_post_meta($gallery_id, '_clearph_youtube_items', true);
+        $youtube_sizing = get_post_meta($gallery_id, '_clearph_youtube_sizing', true);
+        if (!$youtube_items || !is_array($youtube_items)) $youtube_items = array();
+        if (!$youtube_sizing || !is_array($youtube_sizing)) $youtube_sizing = array();
+
         // Handle both old boolean and new integer format for lightbox
         $lightbox_enabled = !empty($settings['lightbox_enabled']) && $settings['lightbox_enabled'] !== '0' && $settings['lightbox_enabled'] !== 0;
 
@@ -83,7 +89,21 @@ class ClearPH_Frontend
             $this->lightbox_data[$gallery_group] = array();
             // Always use full-size images in the lightbox per requirement
             $lightbox_size = 'full';
-            foreach ($images as $image_id) {
+            foreach ($images as $item_id) {
+                // YouTube items
+                if (is_string($item_id) && strpos($item_id, 'yt_') === 0) {
+                    $video_id = substr($item_id, 3);
+                    $meta = isset($youtube_items[$item_id]) ? $youtube_items[$item_id] : array();
+                    $this->lightbox_data[$gallery_group][] = array(
+                        'id' => $item_id,
+                        'src' => 'https://www.youtube.com/embed/' . $video_id . '?autoplay=1&rel=0',
+                        'type' => 'iframe',
+                        'caption' => ''
+                    );
+                    continue;
+                }
+
+                $image_id = $item_id;
                 $mime_type = get_post_mime_type($image_id);
                 $is_video = strpos($mime_type, 'video/') === 0;
                 $alt = get_post_meta($image_id, '_wp_attachment_image_alt', true);
@@ -132,8 +152,12 @@ class ClearPH_Frontend
         $html .= ' data-gallery-id="' . esc_attr($gallery_id) . '"';
         $html .= ' style="--border-radius: ' . esc_attr($settings['border_radius']) . 'px; --column-margin: ' . esc_attr($settings['column_margin']) . ';">';
 
-        foreach ($images as $image_id) {
-            $html .= $this->render_gallery_item($image_id, $settings, $gallery_group, $lightbox_enabled, $gallery_id);
+        foreach ($images as $item_id) {
+            if (is_string($item_id) && strpos($item_id, 'yt_') === 0) {
+                $html .= $this->render_youtube_gallery_item($item_id, $youtube_items, $youtube_sizing, $settings, $gallery_group, $lightbox_enabled, $gallery_id);
+            } else {
+                $html .= $this->render_gallery_item($item_id, $settings, $gallery_group, $lightbox_enabled, $gallery_id);
+            }
         }
 
         $html .= '</div>';
@@ -169,6 +193,68 @@ class ClearPH_Frontend
         foreach ($categories as $category) {
             $html .= '<button class="filter-btn" data-filter="' . esc_attr($category) . '">' . esc_html($category) . '</button>';
         }
+
+        $html .= '</div>';
+
+        return $html;
+    }
+
+    private function render_youtube_gallery_item($yt_id, $youtube_items, $youtube_sizing, $settings, $gallery_group, $lightbox_enabled, $gallery_id)
+    {
+        $video_id = substr($yt_id, 3);
+        $meta = isset($youtube_items[$yt_id]) ? $youtube_items[$yt_id] : array();
+        $sizing = isset($youtube_sizing[$yt_id]) ? $youtube_sizing[$yt_id] : array();
+        $is_short = isset($meta['is_short']) ? $meta['is_short'] : false;
+
+        $masonry_size = isset($sizing['masonry_size']) ? $sizing['masonry_size'] : ($is_short ? 'tall' : 'regular');
+        $column_span = isset($sizing['column_span']) ? absint($sizing['column_span']) : null;
+        $row_span = isset($sizing['row_span']) ? absint($sizing['row_span']) : null;
+
+        $inline_style = '';
+        if ($column_span && $row_span && $settings['masonry_enabled']) {
+            $inline_style = sprintf('grid-column: span %d; grid-row: span %d;', $column_span, $row_span);
+        }
+
+        // Get category
+        $image_categories = get_post_meta($gallery_id, '_clearph_image_categories', true);
+        $category = isset($image_categories[$yt_id]) ? $image_categories[$yt_id] : '';
+
+        $item_class = 'gallery-item gallery-item--youtube size-' . $masonry_size;
+        if ($lightbox_enabled) {
+            $item_class .= ' lightbox-clickable';
+        }
+
+        $html = '<div class="' . esc_attr($item_class) . '"';
+        $html .= ' data-image-id="' . esc_attr($yt_id) . '"';
+        $html .= ' data-type="youtube"';
+
+        if ($category) {
+            $html .= ' data-category="' . esc_attr($category) . '"';
+        }
+        if ($column_span && $row_span) {
+            $html .= ' data-column-span="' . esc_attr($column_span) . '"';
+            $html .= ' data-row-span="' . esc_attr($row_span) . '"';
+        }
+        if ($inline_style) {
+            $html .= ' style="' . esc_attr($inline_style) . '"';
+        }
+
+        $html .= '>';
+
+        // YouTube thumbnail with maxresdefault, fallback to hqdefault
+        $thumb_max = 'https://img.youtube.com/vi/' . esc_attr($video_id) . '/maxresdefault.jpg';
+        $thumb_hq = 'https://img.youtube.com/vi/' . esc_attr($video_id) . '/hqdefault.jpg';
+
+        $html .= '<img src="' . esc_url($thumb_max) . '"';
+        $html .= ' onerror="this.onerror=null;this.src=\'' . esc_url($thumb_hq) . '\';"';
+        $html .= ' alt="YouTube video" class="lazy-image"';
+        $html .= ' style="object-fit: ' . esc_attr($settings['object_fit']) . '; width: 100%; height: 100%; cursor: ' . ($lightbox_enabled ? 'pointer' : 'default') . ';"';
+        $html .= ' loading="lazy">';
+
+        // Play button overlay
+        $html .= '<span class="gallery-youtube-badge">';
+        $html .= '<svg width="48" height="48" viewBox="0 0 68 48"><path d="M66.52 7.74c-.78-2.93-2.49-5.41-5.42-6.19C55.79.13 34 0 34 0S12.21.13 6.9 1.55c-2.93.78-4.63 3.26-5.42 6.19C.06 13.05 0 24 0 24s.06 10.95 1.48 16.26c.78 2.93 2.49 5.41 5.42 6.19C12.21 47.87 34 48 34 48s21.79-.13 27.1-1.55c2.93-.78 4.63-3.26 5.42-6.19C67.94 34.95 68 24 68 24s-.06-10.95-1.48-16.26z" fill="rgba(255,0,0,0.85)"/><path d="M45 24L27 14v20" fill="#fff"/></svg>';
+        $html .= '</span>';
 
         $html .= '</div>';
 
@@ -392,6 +478,18 @@ class ClearPH_Frontend
 
                     // Open FancyBox
                     $.fancybox.open(lightboxData.map(function(item) {
+                        if (item.type === 'iframe') {
+                            return {
+                                src: item.src,
+                                type: 'iframe',
+                                opts: {
+                                    iframe: {
+                                        attr: { allow: 'autoplay; encrypted-media', allowfullscreen: true }
+                                    }
+                                },
+                                caption: item.caption || ''
+                            };
+                        }
                         if (item.type === 'video') {
                             return {
                                 src: '<video controls autoplay style="max-width:100%;max-height:80vh;"><source src="' + item.src + '"></video>',

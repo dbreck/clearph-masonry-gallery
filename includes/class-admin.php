@@ -38,9 +38,11 @@ class ClearPH_Admin
             CLEARPH_MASONRY_VERSION
         );
 
+        global $post;
         wp_localize_script('clearph-admin', 'clearph_admin', array(
             'nonce' => wp_create_nonce('clearph_gallery_nonce'),
-            'ajax_url' => admin_url('admin-ajax.php')
+            'ajax_url' => admin_url('admin-ajax.php'),
+            'post_id' => $post ? $post->ID : 0
         ));
     }
 
@@ -117,6 +119,57 @@ class ClearPH_Admin
                         </select>
                     </div>
                     <div class="image-filename">{{ data.filename }}</div>
+                </div>
+            </div>
+        </script>
+        <script type="text/html" id="tmpl-youtube-item">
+            <div class="gallery-item size-{{ data.masonry_size }}" data-id="{{ data.yt_id }}" data-type="youtube">
+                <div class="image-container">
+                    <img src="{{ data.thumb }}" alt="YouTube video">
+                    <span class="youtube-badge">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="white"><path d="M10 8.64L15.27 12 10 15.36V8.64M8 5v14l11-7L8 5z"/></svg>
+                    </span>
+                </div>
+                <button type="button" class="remove-item">&times;</button>
+                <div class="item-controls">
+                    <div class="masonry-controls">
+                        <button type="button" class="size-btn <# if ( data.masonry_size === 'regular' ) { #>active<# } #>" data-size="regular">R</button>
+                        <button type="button" class="size-btn <# if ( data.masonry_size === 'tall' ) { #>active<# } #>" data-size="tall">T</button>
+                        <button type="button" class="size-btn <# if ( data.masonry_size === 'wide' ) { #>active<# } #>" data-size="wide">W</button>
+                        <button type="button" class="size-btn <# if ( data.masonry_size === 'large' ) { #>active<# } #>" data-size="large">L</button>
+                        <button type="button" class="size-btn <# if ( data.masonry_size === 'xl' ) { #>active<# } #>" data-size="xl">XL</button>
+                    </div>
+                    <div class="grid-sizing-controls" style="margin-top: 8px;">
+                        <div style="display: flex; gap: 8px; align-items: center; justify-content: center;">
+                            <label style="display: flex; flex-direction: column; align-items: center; gap: 2px;">
+                                <span style="font-size: 9px; color: #fff; opacity: 0.8;">Width</span>
+                                <input type="number" class="grid-column-input" min="1" max="12" value="{{ data.column_span }}"
+                                       style="width: 40px; height: 24px; text-align: center; font-size: 11px; border: 1px solid #fff; background: rgba(255,255,255,0.2); color: #fff; border-radius: 2px;" />
+                            </label>
+                            <label style="display: flex; flex-direction: column; align-items: center; gap: 2px;">
+                                <span style="font-size: 9px; color: #fff; opacity: 0.8;">Height</span>
+                                <input type="number" class="grid-row-input" min="1" max="12" value="{{ data.row_span }}"
+                                       style="width: 40px; height: 24px; text-align: center; font-size: 11px; border: 1px solid #fff; background: rgba(255,255,255,0.2); color: #fff; border-radius: 2px;" />
+                            </label>
+                            <button type="button" class="grid-apply-btn"
+                                    style="height: 24px; padding: 0 8px; font-size: 10px; background: #0073aa; color: #fff; border: 1px solid #fff; border-radius: 2px; cursor: pointer;">
+                                Apply
+                            </button>
+                        </div>
+                        <div style="font-size: 8px; color: #fff; opacity: 0.7; margin-top: 4px; text-align: center;">
+                            Micro-columns (1 col = 2, 1.5 col = 3)
+                        </div>
+                    </div>
+                    <div class="youtube-url-controls" style="margin-top: 8px;">
+                        <input type="text" class="youtube-url-input" value="{{ data.url }}" placeholder="YouTube URL"
+                               style="width: 90%; padding: 4px; font-size: 10px; border: 1px solid #fff; background: rgba(255,255,255,0.2); color: #fff; border-radius: 2px;" />
+                    </div>
+                    <div class="category-controls" style="margin-top: 8px;">
+                        <select class="image-category-select" style="width: 90%; padding: 4px; font-size: 10px; border: 1px solid #fff; background: rgba(255,255,255,0.2); color: #fff; border-radius: 2px;">
+                            <option value="">No Category</option>
+                        </select>
+                    </div>
+                    <div class="image-filename">YouTube: {{ data.video_id }}</div>
                 </div>
             </div>
         </script>
