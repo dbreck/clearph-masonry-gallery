@@ -10,6 +10,8 @@ Clear pH Masonry Gallery is a WordPress plugin that provides a drag-and-drop mas
 - Custom post type for reusable galleries with shortcode output
 - Five masonry sizing options (Regular/Tall/Wide/Large/XL) per image
 - Drag-drop gallery builder with grid/list views, grouping, and undo history
+- YouTube video support (mixed into same grid with images and self-hosted videos)
+- URL-based gallery pre-filtering (`?filter=` or `#filter-`)
 - Conditional asset loading (only loads CSS/JS when shortcode is present)
 - Lazy loading with IntersectionObserver
 - Content protection for logged-out users (right-click prevention, optional resolution capping)
@@ -140,8 +142,30 @@ Different container sizes load different WordPress image sizes for optimization:
 ```
 
 **`_clearph_gallery_images`** (array):
-- Array of attachment IDs in display order
+- Mixed array of attachment IDs (integers) and YouTube placeholders (strings like `yt_dQw4w9WgXcQ`) in display order
 - Modified by drag-drop in admin
+
+**`_clearph_youtube_items`** (associative array, keyed by `yt_` ID):
+```php
+[
+  'yt_dQw4w9WgXcQ' => [
+    'video_id' => 'dQw4w9WgXcQ',
+    'url' => 'https://youtube.com/watch?v=dQw4w9WgXcQ',
+    'is_short' => false
+  ]
+]
+```
+
+**`_clearph_youtube_sizing`** (associative array, keyed by `yt_` ID):
+```php
+[
+  'yt_dQw4w9WgXcQ' => [
+    'column_span' => 3,
+    'row_span' => 4,
+    'masonry_size' => 'custom'  // or 'regular'|'tall'|etc. for presets
+  ]
+]
+```
 
 **`clearph_grid_sizing`** (attachment meta, current):
 - Stored per image attachment
@@ -286,7 +310,8 @@ The plugin includes a built-in GitHub updater (`includes/class-github-updater.ph
 **Release workflow:**
 1. Bump version in plugin header AND `CLEARPH_MASONRY_VERSION` constant
 2. Commit and push to `master`
-3. Create a tagged GitHub release (e.g., `v1.3.0`) — the updater checks releases, not commits
+3. Create a tagged GitHub release (e.g., `v1.4.0`) — the updater checks releases, not commits
+4. The repo remote uses SSH alias `github.com-dbreck` (not `github.com`) — see `~/.ssh/config`
 
 ## Progressive Enhancement Rules
 
@@ -304,3 +329,54 @@ The plugin includes a built-in GitHub updater (`includes/class-github-updater.ph
 - **Performance:** Uses `will-change: transform`, hardware acceleration via `translateZ(0)`, conditional asset loading
 - **Browser Support:** Modern browsers only (CSS Grid, IntersectionObserver, ES6 classes - no IE11)
 - **Category Filtering:** Filter buttons and gallery are linked by `data-gallery-id` attribute (not DOM traversal) to work inside WPBakery wrappers
+- **URL Pre-Filtering:** `?filter=CategoryName` or `#filter-CategoryName` triggers the matching filter button on page load (case-sensitive, must match exactly)
+
+## YouTube Video Support (v1.4.0)
+
+YouTube videos can be mixed into masonry galleries alongside images and self-hosted videos.
+
+### Storage Design
+
+YouTube items use a **unified mixed items array** — `_clearph_gallery_images` stores both integer attachment IDs and `yt_VIDEO_ID` string placeholders. YouTube metadata lives in separate post meta keys (`_clearph_youtube_items`, `_clearph_youtube_sizing`) keyed by `yt_` ID.
+
+**Key design decision:** YouTube sizing is stored in hidden JSON fields on the page and saved with the post (no AJAX), since YouTube items don't have WordPress attachment meta.
+
+### Data Flow (YouTube Items)
+
+1. **Admin UI:** "Add YouTube Video" → prompt for URL → client-side `extractYouTubeId()` → `wp.template('youtube-item')` renders item → data written to `#youtube_items` and `#youtube_sizing` hidden inputs
+2. **Sizing changes:** R/T/W/L/XL buttons and Apply button update the hidden JSON fields directly (no AJAX calls)
+3. **Save:** `save_gallery_meta()` reads hidden inputs via `$_POST`, JSON decodes, sanitizes, saves to `_clearph_youtube_items` and `_clearph_youtube_sizing` post meta
+4. **Frontend render:** `render_youtube_gallery_item()` reads meta, generates inline `grid-column`/`grid-row` styles, renders YouTube thumbnail (`maxresdefault.jpg` with `onerror` fallback to `hqdefault.jpg`), play button SVG overlay
+5. **Lightbox:** YouTube items map to FancyBox `iframe` type → `youtube.com/embed/ID?autoplay=1&rel=0`
+
+### Supported URL Formats
+
+`extract_youtube_video_id()` (PHP) and `extractYouTubeId()` (JS) both support:
+- `youtube.com/watch?v=ID`
+- `youtu.be/ID`
+- `youtube.com/shorts/ID` (auto-detected as Short → defaults to Tall size)
+- `youtube.com/embed/ID`
+
+### CRITICAL: Hidden Field JSON Must Be Objects, Not Arrays
+
+**Bug found and fixed in v1.4.0:** When `_clearph_youtube_items` or `_clearph_youtube_sizing` are empty PHP arrays, `wp_json_encode([])` outputs `[]` (JSON array). JavaScript `JSON.parse("[]")` returns a JS array. Setting string-keyed properties on a JS array (`arr["yt_xxx"] = {...}`) works at runtime but **`JSON.stringify` silently drops non-numeric keys on arrays**. The hidden field then submits `[]` and all YouTube data is lost.
+
+**Fix:** PHP uses `wp_json_encode($data ?: new stdClass())` to ensure empty values serialize as `{}`. JS helpers (`getYouTubeItems()`, `getYouTubeSizing()`) coerce parsed arrays to objects with `Array.isArray(raw) ? {} : raw`.
+
+### Files Involved
+
+- **Admin template/save:** `class-gallery-post-type.php` (`render_youtube_item()`, `save_gallery_meta()`)
+- **Admin JS template:** `class-admin.php` (`tmpl-youtube-item`)
+- **Admin JS logic:** `gallery-builder.js` (YouTube management section)
+- **URL helpers:** `class-media-handler.php` (`extract_youtube_video_id()`, `is_youtube_short()`)
+- **Frontend render:** `class-frontend.php` (`render_youtube_gallery_item()`)
+- **Admin CSS:** `admin.css` (YouTube badge, URL input, red button)
+- **Frontend CSS:** `gallery.css` (`.gallery-item--youtube`, `.gallery-youtube-badge`)
+- **Frontend JS:** `masonry-gallery.js` (URL pre-filtering; YouTube items are excluded from video playback via `.gallery-item--video` selector and get image hover zoom via `<img>` element)
+
+### Phase 2 (Future): Bulk Channel Import
+
+Not yet implemented. Plan:
+- "Add Channel Videos" button opens modal with channel URL + count input
+- Requires YouTube Data API v3 key (stored in plugin settings)
+- Uses `search.list` endpoint with `channelId` and `maxResults`
