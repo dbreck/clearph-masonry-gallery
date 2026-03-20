@@ -11,7 +11,7 @@ class ClearPH_Frontend
         add_action('wp_footer', array($this, 'maybe_add_site_right_click_block'));
 
         // Fix RankMath VideoObject schema — inject thumbnailUrl for YouTube embeds
-        add_filter('rank_math/json_ld', array($this, 'fix_video_schema_thumbnails'), 20, 2);
+        add_filter('rank_math/json_ld', array($this, 'fix_video_schema_thumbnails'), 99, 2);
     }
 
     private $lightbox_data = array();
@@ -272,18 +272,19 @@ class ClearPH_Frontend
      * spec. This filter patches that gap by extracting the video ID from the
      * embedUrl and adding the YouTube thumbnail.
      *
-     * @param array $data  The JSON-LD data array with @graph.
+     * The rank_math/json_ld filter passes $data as an associative array keyed by
+     * schema type (e.g., 'VideoObject', 'VideoObject-1', etc.), not as a raw
+     * @graph array.
+     *
+     * @param array  $data    Associative array of schema entities keyed by type.
      * @param object $json_ld The RankMath JsonLd instance.
-     * @return array Modified JSON-LD data.
+     * @return array Modified schema data.
      */
     public function fix_video_schema_thumbnails($data, $json_ld)
     {
-        if (!isset($data['@graph']) || !is_array($data['@graph'])) {
-            return $data;
-        }
-
-        foreach ($data['@graph'] as &$node) {
-            if (!isset($node['@type']) || $node['@type'] !== 'VideoObject') {
+        foreach ($data as $key => &$node) {
+            // Match VideoObject, VideoObject-1, VideoObject-2, etc.
+            if (!is_array($node) || !isset($node['@type']) || $node['@type'] !== 'VideoObject') {
                 continue;
             }
 
