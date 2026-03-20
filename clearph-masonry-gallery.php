@@ -4,7 +4,7 @@
  * Plugin Name: Clear pH Masonry Gallery
  * Plugin URI: https://clearph.com
  * Description: Advanced masonry gallery with drag-drop ordering, bulk media selection, and GSAP animations.
- * Version: 1.4.0
+ * Version: 1.4.1
  * Author: Danny Breckenridge
  * License: GPL v2 or later
  */
@@ -15,7 +15,7 @@ if (!defined('ABSPATH')) {
 }
 
 // Define plugin constants
-define('CLEARPH_MASONRY_VERSION', '1.4.0');
+define('CLEARPH_MASONRY_VERSION', '1.4.1');
 define('CLEARPH_MASONRY_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('CLEARPH_MASONRY_PLUGIN_URL', plugin_dir_url(__FILE__));
 
