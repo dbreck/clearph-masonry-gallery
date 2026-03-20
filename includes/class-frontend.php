@@ -9,6 +9,9 @@ class ClearPH_Frontend
         add_action('wp_footer', array($this, 'add_lightbox_javascript'));
         // Conditional site-wide image protection based on plugin setting
         add_action('wp_footer', array($this, 'maybe_add_site_right_click_block'));
+
+        // Fix RankMath VideoObject schema — inject thumbnailUrl for YouTube embeds
+        add_filter('rank_math/json_ld', array($this, 'fix_video_schema_thumbnails'), 20, 2);
     }
 
     private $lightbox_data = array();
@@ -259,6 +262,43 @@ class ClearPH_Frontend
         $html .= '</div>';
 
         return $html;
+    }
+
+    /**
+     * Fix RankMath VideoObject schema by injecting thumbnailUrl for YouTube embeds.
+     *
+     * RankMath auto-detects YouTube videos on the page and generates VideoObject
+     * schema, but omits thumbnailUrl — a required field per Google's rich results
+     * spec. This filter patches that gap by extracting the video ID from the
+     * embedUrl and adding the YouTube thumbnail.
+     *
+     * @param array $data  The JSON-LD data array with @graph.
+     * @param object $json_ld The RankMath JsonLd instance.
+     * @return array Modified JSON-LD data.
+     */
+    public function fix_video_schema_thumbnails($data, $json_ld)
+    {
+        if (!isset($data['@graph']) || !is_array($data['@graph'])) {
+            return $data;
+        }
+
+        foreach ($data['@graph'] as &$node) {
+            if (!isset($node['@type']) || $node['@type'] !== 'VideoObject') {
+                continue;
+            }
+
+            // Skip if thumbnailUrl already set
+            if (!empty($node['thumbnailUrl'])) {
+                continue;
+            }
+
+            // Extract YouTube video ID from embedUrl and add thumbnail
+            if (!empty($node['embedUrl']) && preg_match('/youtube\.com\/embed\/([a-zA-Z0-9_-]+)/', $node['embedUrl'], $matches)) {
+                $node['thumbnailUrl'] = 'https://img.youtube.com/vi/' . $matches[1] . '/maxresdefault.jpg';
+            }
+        }
+
+        return $data;
     }
 
     private function render_gallery_item($image_id, $settings, $gallery_group, $lightbox_enabled, $gallery_id)
