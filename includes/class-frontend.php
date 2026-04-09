@@ -62,8 +62,16 @@ class ClearPH_Frontend
             'lightbox_enabled' => true,
             'image_size' => 'large',
             'object_fit' => 'cover',
+            'object_position' => 'center center',
             'border_radius' => 8,
-            'column_margin' => '20px'
+            'column_margin' => '20px',
+            'label_show' => false,
+            'label_show_on_hover' => false,
+            'label_placement' => 'bottom-center',
+            'label_tag' => 'p',
+            'label_extra_classes' => '',
+            'label_color' => '#ffffff',
+            'label_shadow' => false
         );
         $settings = wp_parse_args($settings, $defaults);
 
@@ -135,6 +143,10 @@ class ClearPH_Frontend
             }
         }
 
+        // Load per-image labels
+        $image_labels = get_post_meta($gallery_id, '_clearph_image_labels', true);
+        if (!$image_labels || !is_array($image_labels)) $image_labels = array();
+
         // Build output
         $html = '';
 
@@ -153,13 +165,19 @@ class ClearPH_Frontend
         $html .= ' data-column-margin="' . esc_attr($settings['column_margin']) . '"';
         $html .= ' data-gallery-group="' . esc_attr($gallery_group) . '"';
         $html .= ' data-gallery-id="' . esc_attr($gallery_id) . '"';
+        if (!empty($settings['label_show'])) {
+            $html .= ' data-label-show="1"';
+        }
+        if (!empty($settings['label_show_on_hover'])) {
+            $html .= ' data-label-hover="1"';
+        }
         $html .= ' style="--border-radius: ' . esc_attr($settings['border_radius']) . 'px; --column-margin: ' . esc_attr($settings['column_margin']) . ';">';
 
         foreach ($images as $item_id) {
             if (is_string($item_id) && strpos($item_id, 'yt_') === 0) {
-                $html .= $this->render_youtube_gallery_item($item_id, $youtube_items, $youtube_sizing, $settings, $gallery_group, $lightbox_enabled, $gallery_id);
+                $html .= $this->render_youtube_gallery_item($item_id, $youtube_items, $youtube_sizing, $settings, $gallery_group, $lightbox_enabled, $gallery_id, $image_labels);
             } else {
-                $html .= $this->render_gallery_item($item_id, $settings, $gallery_group, $lightbox_enabled, $gallery_id);
+                $html .= $this->render_gallery_item($item_id, $settings, $gallery_group, $lightbox_enabled, $gallery_id, $image_labels);
             }
         }
 
@@ -202,7 +220,7 @@ class ClearPH_Frontend
         return $html;
     }
 
-    private function render_youtube_gallery_item($yt_id, $youtube_items, $youtube_sizing, $settings, $gallery_group, $lightbox_enabled, $gallery_id)
+    private function render_youtube_gallery_item($yt_id, $youtube_items, $youtube_sizing, $settings, $gallery_group, $lightbox_enabled, $gallery_id, $image_labels = array())
     {
         $video_id = substr($yt_id, 3);
         $meta = isset($youtube_items[$yt_id]) ? $youtube_items[$yt_id] : array();
@@ -251,13 +269,15 @@ class ClearPH_Frontend
         $html .= '<img src="' . esc_url($thumb_max) . '"';
         $html .= ' onerror="this.onerror=null;this.src=\'' . esc_url($thumb_hq) . '\';"';
         $html .= ' alt="YouTube video" class="lazy-image"';
-        $html .= ' style="object-fit: ' . esc_attr($settings['object_fit']) . '; width: 100%; height: 100%; cursor: ' . ($lightbox_enabled ? 'pointer' : 'default') . ';"';
+        $html .= ' style="object-fit: ' . esc_attr($settings['object_fit']) . '; object-position: ' . esc_attr($settings['object_position']) . '; width: 100%; height: 100%; cursor: ' . ($lightbox_enabled ? 'pointer' : 'default') . ';"';
         $html .= ' loading="lazy">';
 
         // Play button overlay
         $html .= '<span class="gallery-youtube-badge">';
         $html .= '<svg width="48" height="48" viewBox="0 0 68 48"><path d="M66.52 7.74c-.78-2.93-2.49-5.41-5.42-6.19C55.79.13 34 0 34 0S12.21.13 6.9 1.55c-2.93.78-4.63 3.26-5.42 6.19C.06 13.05 0 24 0 24s.06 10.95 1.48 16.26c.78 2.93 2.49 5.41 5.42 6.19C12.21 47.87 34 48 34 48s21.79-.13 27.1-1.55c2.93-.78 4.63-3.26 5.42-6.19C67.94 34.95 68 24 68 24s-.06-10.95-1.48-16.26z" fill="rgba(255,0,0,0.85)"/><path d="M45 24L27 14v20" fill="#fff"/></svg>';
         $html .= '</span>';
+
+        $html .= $this->render_label($yt_id, $settings, $image_labels);
 
         $html .= '</div>';
 
@@ -302,7 +322,7 @@ class ClearPH_Frontend
         return $data;
     }
 
-    private function render_gallery_item($image_id, $settings, $gallery_group, $lightbox_enabled, $gallery_id)
+    private function render_gallery_item($image_id, $settings, $gallery_group, $lightbox_enabled, $gallery_id, $image_labels = array())
     {
         $mime_type = get_post_mime_type($image_id);
         $is_video = strpos($mime_type, 'video/') === 0;
@@ -329,6 +349,17 @@ class ClearPH_Frontend
         }
 
         $alt = get_post_meta($image_id, '_wp_attachment_image_alt', true);
+
+        // Per-image object-position override (falls back to gallery setting)
+        $item_object_position = get_post_meta($image_id, 'clearph_object_position', true);
+        $allowed_positions = array(
+            'center center', 'center top', 'center bottom',
+            'left top', 'left center', 'left bottom',
+            'right top', 'right center', 'right bottom',
+        );
+        $object_position = in_array($item_object_position, $allowed_positions, true)
+            ? $item_object_position
+            : $settings['object_position'];
 
         // Get image category
         $image_categories = get_post_meta($gallery_id, '_clearph_image_categories', true);
@@ -387,7 +418,7 @@ class ClearPH_Frontend
 
             $html .= '<video class="gallery-video" muted loop playsinline preload="metadata"';
             $html .= ' data-autoplay="' . esc_attr($video_autoplay) . '"';
-            $html .= ' style="object-fit: ' . esc_attr($settings['object_fit']) . '; width: 100%; height: 100%;"';
+            $html .= ' style="object-fit: ' . esc_attr($settings['object_fit']) . '; object-position: ' . esc_attr($object_position) . '; width: 100%; height: 100%;"';
             if ($video_autoplay === 'always') {
                 $html .= ' autoplay';
             }
@@ -404,7 +435,7 @@ class ClearPH_Frontend
             $image_size = $this->get_image_size_for_masonry($masonry_size, $settings['image_size']);
             $image_attrs = array(
                 'class' => 'lazy-image',
-                'style' => 'object-fit: ' . esc_attr($settings['object_fit']) . '; width: 100%; height: 100%; cursor: ' . ($lightbox_enabled ? 'pointer' : 'default') . ';',
+                'style' => 'object-fit: ' . esc_attr($settings['object_fit']) . '; object-position: ' . esc_attr($object_position) . '; width: 100%; height: 100%; cursor: ' . ($lightbox_enabled ? 'pointer' : 'default') . ';',
                 'loading' => 'lazy',
                 'alt' => $alt,
                 'sizes' => $this->get_sizes_attribute_for_grid($column_span, $row_span, $masonry_size, $settings['columns'])
@@ -412,9 +443,60 @@ class ClearPH_Frontend
             $html .= wp_get_attachment_image($image_id, $image_size, false, $image_attrs);
         }
 
+        $html .= $this->render_label($image_id, $settings, $image_labels);
+
         $html .= '</div>';
 
         return $html;
+    }
+
+    /**
+     * Render a label overlay element for a gallery item.
+     */
+    private function render_label($item_id, $settings, $image_labels)
+    {
+        if (empty($settings['label_show']) && empty($settings['label_show_on_hover'])) {
+            return '';
+        }
+
+        $label_data = isset($image_labels[strval($item_id)]) ? $image_labels[strval($item_id)] : null;
+        if (!$label_data || empty($label_data['text'])) {
+            return '';
+        }
+
+        $tag = isset($settings['label_tag']) ? $settings['label_tag'] : 'p';
+        $allowed_tags = array('h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'p', 'span', 'div');
+        if (!in_array($tag, $allowed_tags, true)) $tag = 'p';
+
+        $placement = isset($settings['label_placement']) ? $settings['label_placement'] : 'bottom-center';
+        $extra_classes = isset($settings['label_extra_classes']) ? $settings['label_extra_classes'] : '';
+
+        $classes = 'clearph-gallery-label clearph-gallery-label--' . esc_attr($placement);
+        if ($extra_classes) {
+            $classes .= ' ' . esc_attr($extra_classes);
+        }
+
+        // Color: per-image override > global
+        $color = !empty($label_data['color']) ? $label_data['color'] : $settings['label_color'];
+
+        // Shadow: per-image override (empty=inherit, "1"=on, "0"=off) > global
+        $shadow_override = isset($label_data['shadow']) ? $label_data['shadow'] : '';
+        if ($shadow_override === '1') {
+            $use_shadow = true;
+        } elseif ($shadow_override === '0') {
+            $use_shadow = false;
+        } else {
+            $use_shadow = !empty($settings['label_shadow']);
+        }
+
+        $style = 'color: ' . esc_attr($color) . ';';
+        if ($use_shadow) {
+            $style .= ' text-shadow: 0 1px 3px rgba(0,0,0,0.6), 0 0 8px rgba(0,0,0,0.3);';
+        }
+
+        return '<' . $tag . ' class="' . $classes . '" style="' . $style . '">'
+            . esc_html($label_data['text'])
+            . '</' . $tag . '>';
     }
 
     /**

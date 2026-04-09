@@ -120,10 +120,18 @@ class ClearPH_Gallery_Post_Type
             'lightbox_enabled' => true,
             'image_size' => 'large',
             'object_fit' => 'cover',
+            'object_position' => 'center center',
             'border_radius' => 8,
             'column_margin' => '20px',
             'filter_enabled' => false,
-            'filter_categories' => 'Residences, Amenities, Lifestyle, Local'
+            'filter_categories' => 'Residences, Amenities, Lifestyle, Local',
+            'label_show' => false,
+            'label_show_on_hover' => false,
+            'label_placement' => 'bottom-center',
+            'label_tag' => 'p',
+            'label_extra_classes' => '',
+            'label_color' => '#ffffff',
+            'label_shadow' => false
         );
         $settings = wp_parse_args($settings, $defaults);
         ?>
@@ -184,6 +192,30 @@ class ClearPH_Gallery_Post_Type
                 </td>
             </tr>
             <tr>
+                <th><label for="object_position">Image Position</label></th>
+                <td>
+                    <select id="object_position" name="object_position">
+                        <?php
+                        $position_options = array(
+                            'center center' => 'Center Center',
+                            'center top'    => 'Center Top',
+                            'center bottom' => 'Center Bottom',
+                            'left top'      => 'Left Top',
+                            'left center'   => 'Left Center',
+                            'left bottom'   => 'Left Bottom',
+                            'right top'     => 'Right Top',
+                            'right center'  => 'Right Center',
+                            'right bottom'  => 'Right Bottom',
+                        );
+                        foreach ($position_options as $value => $label) :
+                        ?>
+                            <option value="<?php echo esc_attr($value); ?>" <?php selected($settings['object_position'], $value); ?>><?php echo esc_html($label); ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                    <p class="description">Controls which part of cropped images stays visible (applies when Image Fit is Cover)</p>
+                </td>
+            </tr>
+            <tr>
                 <th><label for="border_radius">Border Radius</label></th>
                 <td>
                     <input type="number" id="border_radius" name="border_radius" value="<?php echo esc_attr($settings['border_radius']); ?>" min="0" max="50" step="1">
@@ -207,6 +239,92 @@ class ClearPH_Gallery_Post_Type
             </tr>
         </table>
 
+        <h3 style="margin-top: 20px; padding-top: 15px; border-top: 1px solid #ddd;">Image Labels</h3>
+        <table class="form-table">
+            <tr>
+                <th>Label Visibility</th>
+                <td>
+                    <label style="display: block; margin-bottom: 6px;">
+                        <input type="checkbox" id="label_show" name="label_show" value="1" <?php checked($settings['label_show']); ?>>
+                        Show labels
+                    </label>
+                    <label style="display: block;">
+                        <input type="checkbox" id="label_show_on_hover" name="label_show_on_hover" value="1" <?php checked($settings['label_show_on_hover']); ?>>
+                        Show labels on hover only
+                    </label>
+                    <p class="description">Check one or both. If neither is checked, labels are hidden.</p>
+                </td>
+            </tr>
+            <tr class="clearph-label-options">
+                <th><label for="label_placement">Label Placement</label></th>
+                <td>
+                    <select id="label_placement" name="label_placement">
+                        <?php
+                        $placements = array(
+                            'bottom-center' => 'Bottom Center',
+                            'bottom-left'   => 'Bottom Left',
+                            'bottom-right'  => 'Bottom Right',
+                            'middle-left'   => 'Middle Left',
+                            'middle-center' => 'Middle Center',
+                            'middle-right'  => 'Middle Right',
+                            'top-left'      => 'Top Left',
+                            'top-center'    => 'Top Center',
+                            'top-right'     => 'Top Right',
+                        );
+                        foreach ($placements as $value => $label) :
+                        ?>
+                            <option value="<?php echo esc_attr($value); ?>" <?php selected($settings['label_placement'], $value); ?>><?php echo esc_html($label); ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </td>
+            </tr>
+            <tr class="clearph-label-options">
+                <th><label for="label_tag">Label Tag</label></th>
+                <td>
+                    <select id="label_tag" name="label_tag">
+                        <?php
+                        $tags = array('h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'p', 'span', 'div');
+                        foreach ($tags as $tag) :
+                        ?>
+                            <option value="<?php echo esc_attr($tag); ?>" <?php selected($settings['label_tag'], $tag); ?>><?php echo esc_html(strtoupper($tag)); ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </td>
+            </tr>
+            <tr class="clearph-label-options">
+                <th><label for="label_extra_classes">Extra CSS Classes</label></th>
+                <td>
+                    <input type="text" id="label_extra_classes" name="label_extra_classes" value="<?php echo esc_attr($settings['label_extra_classes']); ?>" style="width: 100%; max-width: 400px;" placeholder="e.g. eyebrow caption-overlay">
+                </td>
+            </tr>
+            <tr class="clearph-label-options">
+                <th><label for="label_color">Font Color</label></th>
+                <td>
+                    <input type="text" id="label_color" name="label_color" value="<?php echo esc_attr($settings['label_color']); ?>" class="clearph-color-field" placeholder="#ffffff" style="width: 100px;">
+                </td>
+            </tr>
+            <tr class="clearph-label-options">
+                <th>Text Shadow</th>
+                <td>
+                    <label>
+                        <input type="checkbox" id="label_shadow" name="label_shadow" value="1" <?php checked($settings['label_shadow']); ?>>
+                        Enable subtle text shadow for readability over light backgrounds
+                    </label>
+                </td>
+            </tr>
+        </table>
+
+        <script>
+        jQuery(function($){
+            function toggleLabelOptions() {
+                var show = $('#label_show').is(':checked') || $('#label_show_on_hover').is(':checked');
+                $('.clearph-label-options').toggle(show);
+            }
+            $('#label_show, #label_show_on_hover').on('change', toggleLabelOptions);
+            toggleLabelOptions();
+        });
+        </script>
+
         <?php if (defined('WP_DEBUG') && WP_DEBUG): ?>
             <div style="background: #f1f1f1; padding: 10px; margin-top: 20px;">
                 <strong>DEBUG INFO:</strong><br>
@@ -223,10 +341,12 @@ class ClearPH_Gallery_Post_Type
         $settings = get_post_meta($post->ID, '_clearph_gallery_settings', true);
         $youtube_items = get_post_meta($post->ID, '_clearph_youtube_items', true);
         $youtube_sizing = get_post_meta($post->ID, '_clearph_youtube_sizing', true);
+        $image_labels = get_post_meta($post->ID, '_clearph_image_labels', true);
 
         if (!$images) $images = array();
         if (!$youtube_items || !is_array($youtube_items)) $youtube_items = array();
         if (!$youtube_sizing || !is_array($youtube_sizing)) $youtube_sizing = array();
+        if (!$image_labels || !is_array($image_labels)) $image_labels = array();
 
         $defaults = array(
             'masonry_enabled' => true,
@@ -244,6 +364,7 @@ class ClearPH_Gallery_Post_Type
             <div class="gallery-actions">
                 <button type="button" class="button" id="add-images">Add Images</button>
                 <button type="button" class="button" id="add-youtube">Add YouTube Video</button>
+                <button type="button" class="button button-primary" id="order-visually">Order Visually</button>
                 <button type="button" class="button" id="clear-gallery">Clear All</button>
 
                 <div class="gallery-ordering-controls">
@@ -298,6 +419,143 @@ class ClearPH_Gallery_Post_Type
             <input type="hidden" id="image_categories" name="image_categories" value="">
             <input type="hidden" id="youtube_items" name="youtube_items" value="<?php echo esc_attr(wp_json_encode($youtube_items ?: new stdClass())); ?>">
             <input type="hidden" id="youtube_sizing" name="youtube_sizing" value="<?php echo esc_attr(wp_json_encode($youtube_sizing ?: new stdClass())); ?>">
+            <input type="hidden" id="image_labels" name="image_labels" value="<?php echo esc_attr(wp_json_encode($image_labels ?: new stdClass())); ?>">
+        </div>
+
+        <div id="clearph-order-modal" class="clearph-order-modal" style="display:none" aria-hidden="true" data-mode="order">
+            <div class="clearph-order-modal__backdrop"></div>
+            <div class="clearph-order-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="clearph-order-modal-title">
+                <div class="clearph-order-modal__header">
+                    <h2 id="clearph-order-modal-title">Gallery Editor</h2>
+                    <div class="clearph-order-modal__mode-switch" role="tablist">
+                        <button type="button" class="clearph-mode-btn is-active" data-mode="order" role="tab" aria-selected="true">Order</button>
+                        <button type="button" class="clearph-mode-btn" data-mode="layout" role="tab" aria-selected="false">Layout</button>
+                    </div>
+                    <div class="clearph-order-modal__header-tools">
+                        <label class="clearph-order-modal__size-control" data-tool-layout-only style="display:none">
+                            Container width
+                            <input type="range" id="clearph-layout-width" min="30" max="100" step="5" value="85">
+                            <span id="clearph-layout-width-value">85%</span>
+                        </label>
+                        <label class="clearph-order-modal__size-control">
+                            Thumbnail size
+                            <input type="range" id="clearph-order-modal-size" min="60" max="220" step="10" value="110">
+                        </label>
+                        <button type="button" class="button button-primary" id="clearph-order-modal-save">Save &amp; Close</button>
+                        <button type="button" class="button" id="clearph-order-modal-cancel">Cancel</button>
+                    </div>
+                </div>
+                <div class="clearph-order-modal__hint" data-hint-order>Drag tiles to reorder. Left to right, top to bottom is the final order. Changes are not saved until you click Save &amp; Close.</div>
+                <div class="clearph-order-modal__hint" data-hint-layout style="display:none">Click a tile to edit its size and settings in the right panel. Changes save automatically.</div>
+
+                <div class="clearph-order-modal__body clearph-order-modal__body--order">
+                    <div id="clearph-order-modal-grid" class="clearph-order-modal__grid"></div>
+                </div>
+
+                <div class="clearph-order-modal__body clearph-order-modal__body--layout" style="display:none">
+                    <div class="clearph-order-modal__layout-scroll">
+                        <div id="clearph-layout-grid" class="clearph-order-modal__layout-grid"></div>
+                    </div>
+                    <aside id="clearph-layout-panel" class="clearph-order-modal__panel">
+                        <div class="clearph-layout-panel__empty">Select a tile to edit its settings.</div>
+                        <div class="clearph-layout-panel__content" style="display:none">
+                            <div class="clearph-layout-panel__preview"></div>
+                            <div class="clearph-layout-panel__filename"></div>
+
+                            <div class="clearph-layout-panel__section">
+                                <label class="clearph-layout-panel__label">Preset Size</label>
+                                <div class="clearph-layout-panel__presets">
+                                    <button type="button" class="layout-size-btn" data-size="regular">R</button>
+                                    <button type="button" class="layout-size-btn" data-size="tall">T</button>
+                                    <button type="button" class="layout-size-btn" data-size="wide">W</button>
+                                    <button type="button" class="layout-size-btn" data-size="large">L</button>
+                                    <button type="button" class="layout-size-btn" data-size="xl">XL</button>
+                                </div>
+                            </div>
+
+                            <div class="clearph-layout-panel__section">
+                                <label class="clearph-layout-panel__label">Custom Size (micro-columns)</label>
+                                <div class="clearph-layout-panel__wh">
+                                    <label>
+                                        Width
+                                        <input type="number" class="layout-grid-column-input" min="1" max="12" value="2">
+                                    </label>
+                                    <label>
+                                        Height
+                                        <input type="number" class="layout-grid-row-input" min="1" max="12" value="2">
+                                    </label>
+                                    <button type="button" class="button button-primary layout-grid-apply-btn">Apply</button>
+                                </div>
+                                <div class="clearph-layout-panel__hint-small">1 visual col = 2, 1.5 col = 3</div>
+                            </div>
+
+                            <div class="clearph-layout-panel__section">
+                                <label class="clearph-layout-panel__label">Image Position</label>
+                                <select class="layout-position-select">
+                                    <option value="">Inherit</option>
+                                    <option value="center center">Center Center</option>
+                                    <option value="center top">Center Top</option>
+                                    <option value="center bottom">Center Bottom</option>
+                                    <option value="left top">Left Top</option>
+                                    <option value="left center">Left Center</option>
+                                    <option value="left bottom">Left Bottom</option>
+                                    <option value="right top">Right Top</option>
+                                    <option value="right center">Right Center</option>
+                                    <option value="right bottom">Right Bottom</option>
+                                </select>
+                            </div>
+
+                            <div class="clearph-layout-panel__section">
+                                <label class="clearph-layout-panel__label">Label</label>
+                                <input type="text" class="layout-label-text" placeholder="Enter image label...">
+                            </div>
+
+                            <div class="clearph-layout-panel__section">
+                                <label class="clearph-layout-panel__label">Label Color Override</label>
+                                <input type="text" class="layout-label-color" placeholder="Inherit from gallery" style="width: 100px;">
+                                <span class="clearph-layout-panel__hint-small">Leave blank to use gallery default</span>
+                            </div>
+
+                            <div class="clearph-layout-panel__section">
+                                <label class="clearph-layout-panel__label">Label Text Shadow</label>
+                                <select class="layout-label-shadow">
+                                    <option value="">Inherit from gallery</option>
+                                    <option value="1">On</option>
+                                    <option value="0">Off</option>
+                                </select>
+                            </div>
+
+                            <div class="clearph-layout-panel__section clearph-layout-panel__section--category">
+                                <label class="clearph-layout-panel__label">Category</label>
+                                <select class="layout-category-select">
+                                    <option value="">No Category</option>
+                                </select>
+                            </div>
+
+                            <div class="clearph-layout-panel__section clearph-layout-panel__section--video" style="display:none">
+                                <label class="clearph-layout-panel__label">Video Settings</label>
+                                <label class="clearph-layout-panel__sub-label">Autoplay
+                                    <select class="layout-video-autoplay-select">
+                                        <option value="hover">On Hover</option>
+                                        <option value="always">Always</option>
+                                    </select>
+                                </label>
+                                <label class="clearph-layout-panel__sub-label">Play Badge
+                                    <select class="layout-video-badge-select">
+                                        <option value="yes">Show</option>
+                                        <option value="no">Hide</option>
+                                    </select>
+                                </label>
+                            </div>
+
+                            <div class="clearph-layout-panel__section clearph-layout-panel__section--youtube" style="display:none">
+                                <label class="clearph-layout-panel__label">YouTube URL</label>
+                                <input type="text" class="layout-youtube-url-input" placeholder="https://youtube.com/...">
+                            </div>
+                        </div>
+                    </aside>
+                </div>
+            </div>
         </div>
     <?php
     }
@@ -357,6 +615,23 @@ class ClearPH_Gallery_Post_Type
                     <div style="font-size: 8px; color: #fff; opacity: 0.7; margin-top: 4px; text-align: center;">
                         Micro-columns (1 col = 2, 1.5 col = 3)
                     </div>
+                </div>
+                <div class="object-position-controls" style="margin-top: 8px; text-align: center;">
+                    <label style="display: inline-flex; flex-direction: column; align-items: center; gap: 2px;">
+                        <span style="font-size: 9px; color: #fff; opacity: 0.8;">Image Position</span>
+                        <select class="image-position-select" style="width: 140px; padding: 4px; font-size: 10px; border: 1px solid #fff; background: rgba(255,255,255,0.2); color: #fff; border-radius: 2px;">
+                            <option value="">Inherit</option>
+                            <option value="center center">Center Center</option>
+                            <option value="center top">Center Top</option>
+                            <option value="center bottom">Center Bottom</option>
+                            <option value="left top">Left Top</option>
+                            <option value="left center">Left Center</option>
+                            <option value="left bottom">Left Bottom</option>
+                            <option value="right top">Right Top</option>
+                            <option value="right center">Right Center</option>
+                            <option value="right bottom">Right Bottom</option>
+                        </select>
+                    </label>
                 </div>
                 <div class="youtube-url-controls" style="margin-top: 8px;">
                     <input type="text" class="youtube-url-input" value="<?php echo esc_attr($url); ?>" placeholder="YouTube URL"
@@ -422,6 +697,23 @@ class ClearPH_Gallery_Post_Type
                         Micro-columns (1 col = 2, 1.5 col = 3)
                     </div>
                 </div>
+                <div class="object-position-controls" style="margin-top: 8px; text-align: center;">
+                    <label style="display: inline-flex; flex-direction: column; align-items: center; gap: 2px;">
+                        <span style="font-size: 9px; color: #fff; opacity: 0.8;">Image Position</span>
+                        <select class="image-position-select" style="width: 140px; padding: 4px; font-size: 10px; border: 1px solid #fff; background: rgba(255,255,255,0.2); color: #fff; border-radius: 2px;">
+                            <option value="">Inherit</option>
+                            <option value="center center">Center Center</option>
+                            <option value="center top">Center Top</option>
+                            <option value="center bottom">Center Bottom</option>
+                            <option value="left top">Left Top</option>
+                            <option value="left center">Left Center</option>
+                            <option value="left bottom">Left Bottom</option>
+                            <option value="right top">Right Top</option>
+                            <option value="right center">Right Center</option>
+                            <option value="right bottom">Right Bottom</option>
+                        </select>
+                    </label>
+                </div>
                 <div class="video-settings-controls">
                     <span class="video-settings-label">Video Settings</span>
                     <label>
@@ -486,6 +778,23 @@ class ClearPH_Gallery_Post_Type
                         Micro-columns (1 col = 2, 1.5 col = 3)
                     </div>
                 </div>
+                <div class="object-position-controls" style="margin-top: 8px; text-align: center;">
+                    <label style="display: inline-flex; flex-direction: column; align-items: center; gap: 2px;">
+                        <span style="font-size: 9px; color: #fff; opacity: 0.8;">Image Position</span>
+                        <select class="image-position-select" style="width: 140px; padding: 4px; font-size: 10px; border: 1px solid #fff; background: rgba(255,255,255,0.2); color: #fff; border-radius: 2px;">
+                            <option value="">Inherit</option>
+                            <option value="center center">Center Center</option>
+                            <option value="center top">Center Top</option>
+                            <option value="center bottom">Center Bottom</option>
+                            <option value="left top">Left Top</option>
+                            <option value="left center">Left Center</option>
+                            <option value="left bottom">Left Bottom</option>
+                            <option value="right top">Right Top</option>
+                            <option value="right center">Right Center</option>
+                            <option value="right bottom">Right Bottom</option>
+                        </select>
+                    </label>
+                </div>
                 <div class="category-controls" style="margin-top: 8px;">
                     <select class="image-category-select" style="width: 90%; padding: 4px; font-size: 10px; border: 1px solid #fff; background: rgba(255,255,255,0.2); color: #fff; border-radius: 2px;">
                         <option value="">No Category</option>
@@ -496,6 +805,32 @@ class ClearPH_Gallery_Post_Type
         </div>
     <?php
         }
+    }
+
+    private function sanitize_object_position($value)
+    {
+        $allowed = array(
+            'center center', 'center top', 'center bottom',
+            'left top', 'left center', 'left bottom',
+            'right top', 'right center', 'right bottom',
+        );
+        return in_array($value, $allowed, true) ? $value : 'center center';
+    }
+
+    private function sanitize_label_placement($value)
+    {
+        $allowed = array(
+            'bottom-center', 'bottom-left', 'bottom-right',
+            'middle-left', 'middle-center', 'middle-right',
+            'top-left', 'top-center', 'top-right',
+        );
+        return in_array($value, $allowed, true) ? $value : 'bottom-center';
+    }
+
+    private function sanitize_label_tag($value)
+    {
+        $allowed = array('h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'p', 'span', 'div');
+        return in_array($value, $allowed, true) ? $value : 'p';
     }
 
     public function save_gallery_meta($post_id)
@@ -519,10 +854,18 @@ class ClearPH_Gallery_Post_Type
             'lightbox_enabled' => isset($_POST['lightbox_enabled']) ? 1 : 0,
             'image_size' => sanitize_text_field($_POST['image_size']),
             'object_fit' => sanitize_text_field($_POST['object_fit']),
+            'object_position' => $this->sanitize_object_position(isset($_POST['object_position']) ? $_POST['object_position'] : ''),
             'border_radius' => absint($_POST['border_radius']),
             'column_margin' => sanitize_text_field($_POST['column_margin']),
             'filter_enabled' => isset($_POST['filter_enabled']) ? 1 : 0,
-            'filter_categories' => sanitize_text_field($_POST['filter_categories'])
+            'filter_categories' => sanitize_text_field($_POST['filter_categories']),
+            'label_show' => isset($_POST['label_show']) ? 1 : 0,
+            'label_show_on_hover' => isset($_POST['label_show_on_hover']) ? 1 : 0,
+            'label_placement' => $this->sanitize_label_placement(isset($_POST['label_placement']) ? $_POST['label_placement'] : ''),
+            'label_tag' => $this->sanitize_label_tag(isset($_POST['label_tag']) ? $_POST['label_tag'] : ''),
+            'label_extra_classes' => sanitize_text_field(isset($_POST['label_extra_classes']) ? $_POST['label_extra_classes'] : ''),
+            'label_color' => sanitize_hex_color(isset($_POST['label_color']) ? $_POST['label_color'] : '') ?: '#ffffff',
+            'label_shadow' => isset($_POST['label_shadow']) ? 1 : 0,
         );
 
         update_post_meta($post_id, '_clearph_gallery_settings', $settings);
@@ -593,6 +936,26 @@ class ClearPH_Gallery_Post_Type
                     );
                 }
                 update_post_meta($post_id, '_clearph_youtube_sizing', $sanitized);
+            }
+        }
+
+        // Save image labels (per-gallery labels stored as JSON)
+        if (isset($_POST['image_labels'])) {
+            $raw_labels = json_decode(stripslashes($_POST['image_labels']), true);
+            if (is_array($raw_labels)) {
+                $sanitized_labels = array();
+                foreach ($raw_labels as $item_id => $label_data) {
+                    $item_id = sanitize_text_field($item_id);
+                    if (empty($item_id)) continue;
+                    $text = isset($label_data['text']) ? sanitize_text_field($label_data['text']) : '';
+                    if (empty($text)) continue; // Skip items with no label
+                    $sanitized_labels[$item_id] = array(
+                        'text' => $text,
+                        'color' => isset($label_data['color']) ? sanitize_hex_color($label_data['color']) : '',
+                        'shadow' => isset($label_data['shadow']) ? sanitize_text_field($label_data['shadow']) : '',
+                    );
+                }
+                update_post_meta($post_id, '_clearph_image_labels', $sanitized_labels);
             }
         }
 

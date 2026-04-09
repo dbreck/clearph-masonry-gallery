@@ -422,6 +422,57 @@
     }
 }
 
+/* ===== Image Labels ===== */
+.clearph-gallery-label {
+    position: absolute;
+    margin: 0;
+    pointer-events: none;
+    z-index: 2;
+    line-height: 1.3;
+}
+
+/* Hidden by default — require data-label-show or data-label-hover to display */
+.clearph-gallery .clearph-gallery-label {
+    display: none;
+}
+
+/* Show always */
+.clearph-gallery[data-label-show="1"] .clearph-gallery-label {
+    display: block;
+}
+
+/* Show on hover only */
+.clearph-gallery[data-label-hover="1"] .clearph-gallery-label {
+    display: block;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+.clearph-gallery[data-label-hover="1"] .gallery-item:hover .clearph-gallery-label {
+    opacity: 1;
+}
+
+/* If both show + hover are set, always visible (show wins) */
+.clearph-gallery[data-label-show="1"][data-label-hover="1"] .clearph-gallery-label {
+    opacity: 1;
+    transition: none;
+}
+
+/* Bottom positions */
+.clearph-gallery-label--bottom-left   { bottom: 40px; left: 20px; text-align: left; }
+.clearph-gallery-label--bottom-center { bottom: 40px; left: 20px; right: 20px; text-align: center; }
+.clearph-gallery-label--bottom-right  { bottom: 40px; right: 20px; text-align: right; }
+
+/* Middle positions */
+.clearph-gallery-label--middle-left   { top: 50%; left: 20px; transform: translateY(-50%); text-align: left; }
+.clearph-gallery-label--middle-center { top: 50%; left: 20px; right: 20px; transform: translateY(-50%); text-align: center; }
+.clearph-gallery-label--middle-right  { top: 50%; right: 20px; transform: translateY(-50%); text-align: right; }
+
+/* Top positions */
+.clearph-gallery-label--top-left   { top: 40px; left: 20px; text-align: left; }
+.clearph-gallery-label--top-center { top: 40px; left: 20px; right: 20px; text-align: center; }
+.clearph-gallery-label--top-right  { top: 40px; right: 20px; text-align: right; }
+
 /* Print styles */
 @media print {
     .clearph-gallery {

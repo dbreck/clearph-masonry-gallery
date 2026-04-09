@@ -10,6 +10,72 @@ class ClearPH_Media_Handler {
         add_action('wp_ajax_clearph_get_image_categories', array($this, 'get_image_categories'));
         add_action('wp_ajax_clearph_update_video_settings', array($this, 'update_video_settings'));
         add_action('wp_ajax_clearph_get_video_settings', array($this, 'get_video_settings'));
+        add_action('wp_ajax_clearph_update_object_position', array($this, 'update_object_position'));
+        add_action('wp_ajax_clearph_get_object_position', array($this, 'get_object_position'));
+    }
+
+    /**
+     * Allowed object-position keyword values (matches the 9 presets in the UI).
+     */
+    public static function allowed_object_positions() {
+        return array(
+            'center center', 'center top', 'center bottom',
+            'left top', 'left center', 'left bottom',
+            'right top', 'right center', 'right bottom',
+        );
+    }
+
+    /**
+     * Update per-image object-position (for cover cropping alignment).
+     * Empty string clears the override so the gallery-level default applies.
+     */
+    public function update_object_position() {
+        check_ajax_referer('clearph_gallery_nonce', 'nonce');
+
+        $image_id = absint($_POST['image_id']);
+        $position = isset($_POST['position']) ? sanitize_text_field($_POST['position']) : '';
+
+        if (!$image_id) {
+            wp_send_json_error('Invalid image ID');
+        }
+
+        if ($position === '') {
+            delete_post_meta($image_id, 'clearph_object_position');
+            wp_send_json_success(array('image_id' => $image_id, 'position' => ''));
+        }
+
+        if (!in_array($position, self::allowed_object_positions(), true)) {
+            wp_send_json_error('Invalid position value');
+        }
+
+        update_post_meta($image_id, 'clearph_object_position', $position);
+
+        wp_send_json_success(array(
+            'image_id' => $image_id,
+            'position' => $position,
+        ));
+    }
+
+    /**
+     * Get per-image object-position (empty string means "inherit from gallery").
+     */
+    public function get_object_position() {
+        check_ajax_referer('clearph_gallery_nonce', 'nonce');
+
+        $image_id = absint($_POST['image_id']);
+        if (!$image_id) {
+            wp_send_json_error('Invalid image ID');
+        }
+
+        $position = get_post_meta($image_id, 'clearph_object_position', true);
+        if (!in_array($position, self::allowed_object_positions(), true)) {
+            $position = '';
+        }
+
+        wp_send_json_success(array(
+            'image_id' => $image_id,
+            'position' => $position,
+        ));
     }
 
     /**
