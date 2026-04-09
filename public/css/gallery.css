@@ -458,20 +458,18 @@
     transition: none;
 }
 
-/* Bottom positions */
-.clearph-gallery-label--bottom-left   { bottom: 40px; left: 20px; text-align: left; }
-.clearph-gallery-label--bottom-center { bottom: 40px; left: 20px; right: 20px; text-align: center; }
-.clearph-gallery-label--bottom-right  { bottom: 40px; right: 20px; text-align: right; }
+/* Placement — scoped under .clearph-gallery for specificity over extra theme classes */
+.clearph-gallery .clearph-gallery-label--bottom-left   { bottom: 40px; left: 20px; right: auto; top: auto; text-align: left; transform: none; }
+.clearph-gallery .clearph-gallery-label--bottom-center { bottom: 40px; left: 20px; right: 20px; top: auto; text-align: center; transform: none; }
+.clearph-gallery .clearph-gallery-label--bottom-right  { bottom: 40px; right: 20px; left: auto; top: auto; text-align: right; transform: none; }
 
-/* Middle positions */
-.clearph-gallery-label--middle-left   { top: 50%; left: 20px; transform: translateY(-50%); text-align: left; }
-.clearph-gallery-label--middle-center { top: 50%; left: 20px; right: 20px; transform: translateY(-50%); text-align: center; }
-.clearph-gallery-label--middle-right  { top: 50%; right: 20px; transform: translateY(-50%); text-align: right; }
+.clearph-gallery .clearph-gallery-label--middle-left   { top: 50%; left: 20px; right: auto; bottom: auto; transform: translateY(-50%); text-align: left; }
+.clearph-gallery .clearph-gallery-label--middle-center { top: 50%; left: 20px; right: 20px; bottom: auto; transform: translateY(-50%); text-align: center; }
+.clearph-gallery .clearph-gallery-label--middle-right  { top: 50%; right: 20px; left: auto; bottom: auto; transform: translateY(-50%); text-align: right; }
 
-/* Top positions */
-.clearph-gallery-label--top-left   { top: 40px; left: 20px; text-align: left; }
-.clearph-gallery-label--top-center { top: 40px; left: 20px; right: 20px; text-align: center; }
-.clearph-gallery-label--top-right  { top: 40px; right: 20px; text-align: right; }
+.clearph-gallery .clearph-gallery-label--top-left   { top: 40px; left: 20px; right: auto; bottom: auto; text-align: left; transform: none; }
+.clearph-gallery .clearph-gallery-label--top-center { top: 40px; left: 20px; right: 20px; bottom: auto; text-align: center; transform: none; }
+.clearph-gallery .clearph-gallery-label--top-right  { top: 40px; right: 20px; left: auto; bottom: auto; text-align: right; transform: none; }
 
 /* Print styles */
 @media print {
