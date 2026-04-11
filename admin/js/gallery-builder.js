@@ -155,13 +155,21 @@ jQuery(document).ready(function ($) {
     },
 
     loadExistingImageSizing: function () {
-      // Load grid sizing for all existing images on page load (skip YouTube items)
-      $("#gallery-preview .gallery-item").each(function () {
-        const imageId = $(this).data("id")
-        if (imageId && String(imageId).indexOf("yt_") !== 0) {
-          galleryBuilder.loadMasonrySize(imageId)
-        }
-      })
+      // Sizing is now rendered server-side from _clearph_image_sizing gallery post meta.
+      // No AJAX calls needed on initial page load — PHP sets input values and inline styles.
+      // loadMasonrySize() is still used for newly added images via the media uploader.
+    },
+
+    // Helper: read/write gallery-scoped image sizing from/to hidden field
+    getImageSizing: function () {
+      var raw = JSON.parse($("#image_sizing").val() || "{}")
+      return Array.isArray(raw) ? {} : raw
+    },
+
+    updateImageSizingField: function (imageId, colSpan, rowSpan) {
+      var data = this.getImageSizing()
+      data[String(imageId)] = { column_span: colSpan, row_span: rowSpan }
+      $("#image_sizing").val(JSON.stringify(data))
     },
 
     switchView: function (view) {
@@ -500,12 +508,13 @@ jQuery(document).ready(function ($) {
       // YouTube items load from hidden field, not AJAX
       if (String(imageId).indexOf("yt_") === 0) return
 
-      // Try to load new grid sizing format first
+      // Try to load grid sizing (checks gallery-scoped, then attachment meta, then legacy)
       $.post(
         clearph_admin.ajax_url,
         {
           action: "clearph_get_grid_sizing",
           image_id: imageId,
+          post_id: clearph_admin.post_id,
           nonce: clearph_admin.nonce,
         },
         function (response) {
@@ -582,6 +591,7 @@ jQuery(document).ready(function ($) {
         {
           action: "clearph_update_masonry_size",
           image_id: imageId,
+          post_id: clearph_admin.post_id,
           size: size,
           nonce: clearph_admin.nonce,
         },
@@ -597,6 +607,11 @@ jQuery(document).ready(function ($) {
 
             // Also update grid inputs to match the preset
             galleryBuilder.syncGridInputsFromSize(item, size)
+
+            // Sync hidden field
+            var colSpan = parseInt(item.find(".grid-column-input").val()) || 2
+            var rowSpan = parseInt(item.find(".grid-row-input").val()) || 2
+            galleryBuilder.updateImageSizingField(imageId, colSpan, rowSpan)
           }
         }
       )
@@ -644,6 +659,7 @@ jQuery(document).ready(function ($) {
         {
           action: "clearph_update_grid_sizing",
           image_id: imageId,
+          post_id: clearph_admin.post_id,
           column_span: columnSpan,
           row_span: rowSpan,
           nonce: clearph_admin.nonce,
@@ -658,6 +674,9 @@ jQuery(document).ready(function ($) {
 
             // Deactivate preset size buttons (custom sizing)
             item.find(".size-btn").removeClass("active")
+
+            // Sync hidden field
+            galleryBuilder.updateImageSizingField(imageId, columnSpan, rowSpan)
 
             // Visual feedback
             btn.text("\u2713").css("background", "#46b450")
@@ -1022,6 +1041,10 @@ jQuery(document).ready(function ($) {
         document.documentElement.style.setProperty("--clearph-layout-width", pct + "%")
         $("#clearph-layout-width-value").text(pct + "%")
       })
+
+      // Bulk layout buttons (Layout mode only)
+      $("#clearph-randomize-layout").on("click", () => this.randomizeLayout())
+      $("#clearph-smart-layout").on("click", () => this.smartLayout())
 
       // Mode switch tabs
       $(document).on("click", ".clearph-mode-btn", (e) => {
@@ -1758,6 +1781,362 @@ jQuery(document).ready(function ($) {
 
       // Update image order to reflect any ID change
       galleryBuilder.updateImageOrder()
+    },
+
+    // ===== Bulk Layout Algorithms =====
+
+    /**
+     * Generate a row-packed layout that tiles perfectly (no gaps).
+     * @param {Array} items  - array of { id, ... } (one per gallery item)
+     * @param {number} microCols - total micro-columns for the gallery
+     * @param {Function} getSizes - (item, remaining, index, items) => array of { col, row, weight }
+     * @returns {Object} map of id → { column_span, row_span }
+     */
+    generatePackedLayout: function (items, microCols, getSizes) {
+      const result = {}
+      let i = 0
+      const consecutiveR = { count: 0 }
+      let lastWasXL = false
+
+      while (i < items.length) {
+        let remaining = microCols
+
+        while (remaining > 0 && i < items.length) {
+          let candidates = getSizes(items[i], remaining, i, items)
+
+          // Filter to sizes that fit remaining space
+          candidates = candidates.filter((c) => c.col <= remaining)
+
+          // Rhythm rules
+          if (lastWasXL) {
+            candidates = candidates.filter((c) => c.col < microCols)
+          }
+          if (consecutiveR.count >= 3) {
+            const nonR = candidates.filter((c) => !(c.col === 2 && c.row === 2))
+            if (nonR.length) candidates = nonR
+          }
+
+          // If nothing fits (shouldn't happen, but safety), expand previous item
+          if (!candidates.length) {
+            break
+          }
+
+          // Weighted random pick
+          const pick = this.weightedPick(candidates)
+
+          // Track rhythm
+          if (pick.col === 2 && pick.row === 2) {
+            consecutiveR.count++
+          } else {
+            consecutiveR.count = 0
+          }
+          lastWasXL = pick.col >= microCols
+
+          result[items[i].id] = { column_span: pick.col, row_span: pick.row }
+          remaining -= pick.col
+          i++
+
+          // If remaining is too small for the minimum size (1 micro-col), expand last item
+          if (remaining > 0 && remaining < 2 && i <= items.length) {
+            const lastId = items[i - 1].id
+            result[lastId].column_span += remaining
+            remaining = 0
+          }
+        }
+      }
+
+      return result
+    },
+
+    weightedPick: function (candidates) {
+      const totalWeight = candidates.reduce((sum, c) => sum + (c.weight || 1), 0)
+      let r = Math.random() * totalWeight
+      for (const c of candidates) {
+        r -= c.weight || 1
+        if (r <= 0) return c
+      }
+      return candidates[candidates.length - 1]
+    },
+
+    /**
+     * Randomize Layout — weighted random sizes with row-packing.
+     */
+    randomizeLayout: function () {
+      const $items = $("#gallery-preview .gallery-item")
+      if (!$items.length) return
+      if (!confirm("This will resize all items in the gallery. Continue?")) return
+
+      const columns = parseInt($("#columns").val(), 10) || 4
+      const microCols = columns * 2
+      const itemCount = $items.length
+
+      // Build item list
+      const items = []
+      $items.each(function () {
+        items.push({ id: String($(this).data("id")) })
+      })
+
+      // Size pool — weights adjusted by gallery size
+      const getSizes = (item, remaining, index) => {
+        const pool = []
+
+        // R (2x2) — always available, workhorse
+        pool.push({ col: 2, row: 2, weight: 40 })
+
+        // T (2x4) — vertical accent
+        pool.push({ col: 2, row: 4, weight: 15 })
+
+        // W (4x2) — horizontal accent (only if grid is wide enough)
+        if (microCols >= 4) {
+          pool.push({ col: 4, row: 2, weight: 15 })
+        }
+
+        // L (4x4) — hero anchor
+        if (microCols >= 4) {
+          pool.push({ col: 4, row: 4, weight: itemCount <= 8 ? 15 : 10 })
+        }
+
+        // XL (full width x 6) — dramatic, rare
+        if (microCols > 4 && itemCount >= 10) {
+          pool.push({ col: microCols, row: 6, weight: 3 })
+        }
+
+        // Boost non-R for the first row to create a visual hook
+        if (index === 0) {
+          pool.forEach((p) => {
+            if (!(p.col === 2 && p.row === 2)) p.weight *= 2
+          })
+        }
+
+        return pool
+      }
+
+      const sizingMap = this.generatePackedLayout(items, microCols, getSizes)
+      this.applyBulkSizing(sizingMap)
+    },
+
+    /**
+     * Smart Layout — fetch image aspect ratios, assign best-fit sizes.
+     */
+    smartLayout: function () {
+      const $items = $("#gallery-preview .gallery-item")
+      if (!$items.length) return
+      if (!confirm("This will resize all items based on image proportions. Continue?")) return
+
+      const columns = parseInt($("#columns").val(), 10) || 4
+      const microCols = columns * 2
+
+      // Collect attachment IDs (skip YouTube items — handled separately)
+      const items = []
+      const imageIds = []
+      $items.each(function () {
+        const id = String($(this).data("id"))
+        items.push({ id: id, type: $(this).data("type") || "image" })
+        if (id.indexOf("yt_") !== 0) {
+          imageIds.push(id)
+        }
+      })
+
+      // Show loading state
+      const $grid = $("#clearph-layout-grid")
+      $grid.css("opacity", "0.5")
+
+      // Fetch metadata for images
+      const fetchMetadata = imageIds.length
+        ? $.post(clearph_admin.ajax_url, {
+            action: "clearph_get_images_metadata",
+            nonce: clearph_admin.nonce,
+            image_ids: JSON.stringify(imageIds),
+          })
+        : $.Deferred().resolve({ success: true, data: {} }).promise()
+
+      fetchMetadata
+        .done((response) => {
+          const meta = response.success ? response.data : {}
+
+          // Classify YouTube items using stored data
+          const ytItems = this.getYouTubeItems()
+
+          // Assign aspect ratio info to each item
+          items.forEach((item) => {
+            if (item.id.indexOf("yt_") === 0) {
+              // YouTube: check is_short flag
+              const ytData = ytItems[item.id]
+              item.ratio = ytData && ytData.is_short ? 0.5625 : 1.778 // 9:16 or 16:9
+            } else if (meta[item.id]) {
+              item.ratio = meta[item.id].aspect_ratio
+              item.resolution = meta[item.id].width * meta[item.id].height
+            } else {
+              item.ratio = 1.0 // Unknown, treat as square
+            }
+          })
+
+          // Find hero image (highest resolution)
+          let heroId = null
+          let maxRes = 0
+          items.forEach((item) => {
+            if (item.resolution && item.resolution > maxRes) {
+              maxRes = item.resolution
+              heroId = item.id
+            }
+          })
+
+          // Count distribution for variety injection
+          const buckets = { wide: 0, landscape: 0, square: 0, portrait: 0, tall: 0 }
+          items.forEach((item) => {
+            const b = this.classifyAspectRatio(item.ratio)
+            buckets[b]++
+          })
+          const dominant = Object.keys(buckets).reduce((a, b) => (buckets[a] >= buckets[b] ? a : b))
+          const isUniform = buckets[dominant] / items.length > 0.6
+
+          const getSizes = (item, remaining, index) => {
+            const classification = this.classifyAspectRatio(item.ratio)
+            const pool = []
+
+            // Hero boost: first item or hero image gets a large size
+            if (item.id === heroId && index < 3 && microCols >= 4) {
+              pool.push({ col: 4, row: 4, weight: 50 })
+              if (microCols > 4 && items.length >= 10) {
+                pool.push({ col: microCols, row: 6, weight: 20 })
+              }
+            }
+
+            // Best-fit sizes based on aspect ratio
+            switch (classification) {
+              case "wide":
+                if (microCols >= 6) pool.push({ col: 6, row: 2, weight: 30 })
+                if (microCols >= 4) pool.push({ col: 4, row: 2, weight: 40 })
+                pool.push({ col: 2, row: 2, weight: 5 })
+                break
+              case "landscape":
+                if (microCols >= 4) pool.push({ col: 4, row: 2, weight: 35 })
+                pool.push({ col: 2, row: 2, weight: 20 })
+                if (microCols >= 4) pool.push({ col: 4, row: 3, weight: 10 })
+                break
+              case "square":
+                pool.push({ col: 2, row: 2, weight: 35 })
+                if (microCols >= 4) pool.push({ col: 4, row: 4, weight: 15 })
+                pool.push({ col: 2, row: 3, weight: 10 })
+                break
+              case "portrait":
+                pool.push({ col: 2, row: 4, weight: 35 })
+                pool.push({ col: 2, row: 3, weight: 20 })
+                pool.push({ col: 2, row: 2, weight: 5 })
+                break
+              case "tall":
+                pool.push({ col: 2, row: 4, weight: 40 })
+                pool.push({ col: 2, row: 6, weight: 15 })
+                pool.push({ col: 2, row: 3, weight: 10 })
+                break
+            }
+
+            // Variety injection for uniform galleries
+            if (isUniform && classification === dominant) {
+              // Add some contrasting sizes
+              if (classification !== "portrait" && classification !== "tall") {
+                pool.push({ col: 2, row: 4, weight: 12 })
+              }
+              if (classification !== "wide" && classification !== "landscape" && microCols >= 4) {
+                pool.push({ col: 4, row: 2, weight: 12 })
+              }
+            }
+
+            // Ensure at least one option
+            if (!pool.length) {
+              pool.push({ col: 2, row: 2, weight: 1 })
+            }
+
+            return pool
+          }
+
+          const sizingMap = this.generatePackedLayout(items, microCols, getSizes)
+          this.applyBulkSizing(sizingMap)
+        })
+        .fail(() => {
+          alert("Failed to fetch image metadata. Please try again.")
+        })
+        .always(() => {
+          $grid.css("opacity", "")
+        })
+    },
+
+    classifyAspectRatio: function (ratio) {
+      if (ratio >= 2.0) return "wide"
+      if (ratio >= 1.3) return "landscape"
+      if (ratio >= 0.8) return "square"
+      if (ratio >= 0.5) return "portrait"
+      return "tall"
+    },
+
+    /**
+     * Apply a sizing map to all gallery items (batch update).
+     * @param {Object} sizingMap - { id: { column_span, row_span }, ... }
+     */
+    applyBulkSizing: function (sizingMap) {
+      const imageSizing = {}
+      const ytSizing = {}
+
+      // Split by type
+      Object.keys(sizingMap).forEach((id) => {
+        if (id.indexOf("yt_") === 0) {
+          ytSizing[id] = sizingMap[id]
+        } else {
+          imageSizing[id] = sizingMap[id]
+        }
+      })
+
+      // Update YouTube items via hidden JSON field
+      Object.keys(ytSizing).forEach((ytId) => {
+        const sizing = ytSizing[ytId]
+        this.updateYouTubeSizing(ytId, {
+          column_span: sizing.column_span,
+          row_span: sizing.row_span,
+          masonry_size: "custom",
+        })
+      })
+
+      // Update all source items in the DOM
+      Object.keys(sizingMap).forEach((id) => {
+        const sizing = sizingMap[id]
+        const $source = this.getSourceItem(id)
+        if (!$source.length) return
+
+        // Update input values
+        $source.find(".grid-column-input").val(sizing.column_span)
+        $source.find(".grid-row-input").val(sizing.row_span)
+
+        // Update inline grid styles
+        $source.css({
+          "grid-column": "span " + sizing.column_span,
+          "grid-row": "span " + sizing.row_span,
+        })
+
+        // Clear preset size classes and active buttons
+        $source.removeClass("size-regular size-tall size-wide size-large size-xl")
+        $source.find(".size-btn").removeClass("active")
+      })
+
+      // Sync image sizing to hidden field and batch AJAX
+      if (Object.keys(imageSizing).length) {
+        // Update hidden field
+        var allSizing = this.getImageSizing()
+        Object.keys(imageSizing).forEach((id) => {
+          allSizing[id] = imageSizing[id]
+        })
+        $("#image_sizing").val(JSON.stringify(allSizing))
+
+        // Batch AJAX
+        $.post(clearph_admin.ajax_url, {
+          action: "clearph_batch_update_sizing",
+          nonce: clearph_admin.nonce,
+          post_id: clearph_admin.post_id,
+          sizing: JSON.stringify(imageSizing),
+        })
+      }
+
+      // Re-render the layout view
+      this.renderLayoutView()
     },
 
     bindCategorySave: function () {

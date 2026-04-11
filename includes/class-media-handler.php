@@ -12,6 +12,8 @@ class ClearPH_Media_Handler {
         add_action('wp_ajax_clearph_get_video_settings', array($this, 'get_video_settings'));
         add_action('wp_ajax_clearph_update_object_position', array($this, 'update_object_position'));
         add_action('wp_ajax_clearph_get_object_position', array($this, 'get_object_position'));
+        add_action('wp_ajax_clearph_batch_update_sizing', array($this, 'batch_update_sizing'));
+        add_action('wp_ajax_clearph_get_images_metadata', array($this, 'get_images_metadata'));
     }
 
     /**
@@ -79,81 +81,94 @@ class ClearPH_Media_Handler {
     }
 
     /**
-     * Legacy method: Update masonry size using named sizes (regular, tall, wide, large, xl)
-     * Kept for backward compatibility with existing admin UI
+     * Helper: update a single image's sizing within gallery-scoped post meta.
+     */
+    private function set_image_sizing($post_id, $image_id, $column_span, $row_span) {
+        $all_sizing = get_post_meta($post_id, '_clearph_image_sizing', true);
+        if (!is_array($all_sizing)) $all_sizing = array();
+        $all_sizing[strval($image_id)] = array(
+            'column_span' => $column_span,
+            'row_span'    => $row_span,
+        );
+        update_post_meta($post_id, '_clearph_image_sizing', $all_sizing);
+    }
+
+    /**
+     * Update masonry size using named presets (regular, tall, wide, large, xl).
+     * Stores in gallery-scoped post meta (_clearph_image_sizing).
      */
     public function update_masonry_size() {
         check_ajax_referer('clearph_gallery_nonce', 'nonce');
 
         $image_id = absint($_POST['image_id']);
-        $size = sanitize_text_field($_POST['size']);
+        $post_id  = isset($_POST['post_id']) ? absint($_POST['post_id']) : 0;
+        $size     = sanitize_text_field($_POST['size']);
 
-        if (!$image_id || !in_array($size, array('regular', 'tall', 'wide', 'large', 'xl'))) {
+        if (!$image_id || !$post_id || !in_array($size, array('regular', 'tall', 'wide', 'large', 'xl'))) {
             wp_die('Invalid parameters');
         }
 
-        // Update the masonry sizing meta (using FileBird's field name)
-        update_post_meta($image_id, 'clearph_masonry_sizing', $size);
+        $converted = $this->convert_legacy_size_to_grid($size);
+        $this->set_image_sizing($post_id, $image_id, $converted['column_span'], $converted['row_span']);
 
         wp_send_json_success(array(
             'image_id' => $image_id,
-            'size' => $size
+            'size' => $size,
+            'column_span' => $converted['column_span'],
+            'row_span' => $converted['row_span'],
         ));
     }
 
     /**
-     * Legacy method: Get masonry size
+     * Get masonry size — reads from gallery-scoped post meta with attachment meta fallback.
      */
     public function get_masonry_size() {
         check_ajax_referer('clearph_gallery_nonce', 'nonce');
 
         $image_id = absint($_POST['image_id']);
+        $post_id  = isset($_POST['post_id']) ? absint($_POST['post_id']) : 0;
 
         if (!$image_id) {
             wp_die('Invalid image ID');
         }
 
-        $size = get_post_meta($image_id, 'clearph_masonry_sizing', true) ?: 'regular';
+        // Gallery-scoped sizing
+        if ($post_id) {
+            $all_sizing = get_post_meta($post_id, '_clearph_image_sizing', true);
+            if (is_array($all_sizing) && isset($all_sizing[strval($image_id)])) {
+                $s = $all_sizing[strval($image_id)];
+                $size = $this->convert_grid_to_legacy_name($s['column_span'], $s['row_span']);
+                wp_send_json_success(array('image_id' => $image_id, 'size' => $size));
+            }
+        }
 
-        wp_send_json_success(array(
-            'image_id' => $image_id,
-            'size' => $size
-        ));
+        // Legacy fallback
+        $size = get_post_meta($image_id, 'clearph_masonry_sizing', true) ?: 'regular';
+        wp_send_json_success(array('image_id' => $image_id, 'size' => $size));
     }
 
     /**
-     * New method: Update grid sizing using numeric column/row spans
-     * Supports fractional column widths via micro-column system
+     * Update grid sizing — stores in gallery-scoped post meta.
      */
     public function update_grid_sizing() {
         check_ajax_referer('clearph_gallery_nonce', 'nonce');
 
-        $image_id = absint($_POST['image_id']);
+        $image_id    = absint($_POST['image_id']);
+        $post_id     = isset($_POST['post_id']) ? absint($_POST['post_id']) : 0;
         $column_span = isset($_POST['column_span']) ? absint($_POST['column_span']) : 0;
-        $row_span = isset($_POST['row_span']) ? absint($_POST['row_span']) : 0;
+        $row_span    = isset($_POST['row_span']) ? absint($_POST['row_span']) : 0;
 
-        // Validate parameters
-        if (!$image_id) {
-            wp_send_json_error('Invalid image ID');
+        if (!$image_id || !$post_id) {
+            wp_send_json_error('Invalid image or gallery ID');
         }
-
-        // Column span: 1-12 micro-columns (supports up to 6 visual columns)
         if ($column_span < 1 || $column_span > 12) {
             wp_send_json_error('Column span must be between 1 and 12');
         }
-
-        // Row span: 1-12 rows
         if ($row_span < 1 || $row_span > 12) {
             wp_send_json_error('Row span must be between 1 and 12');
         }
 
-        // Store grid sizing data as array
-        $grid_sizing = array(
-            'column_span' => $column_span,
-            'row_span' => $row_span
-        );
-
-        update_post_meta($image_id, 'clearph_grid_sizing', $grid_sizing);
+        $this->set_image_sizing($post_id, $image_id, $column_span, $row_span);
 
         wp_send_json_success(array(
             'image_id' => $image_id,
@@ -163,40 +178,53 @@ class ClearPH_Media_Handler {
     }
 
     /**
-     * New method: Get grid sizing
-     * Returns numeric column/row spans, or converts legacy named size if needed
+     * Get grid sizing — reads from gallery-scoped post meta, falls back to attachment meta.
      */
     public function get_grid_sizing() {
         check_ajax_referer('clearph_gallery_nonce', 'nonce');
 
         $image_id = absint($_POST['image_id']);
+        $post_id  = isset($_POST['post_id']) ? absint($_POST['post_id']) : 0;
 
         if (!$image_id) {
             wp_send_json_error('Invalid image ID');
         }
 
-        // First check for new grid sizing format
-        $grid_sizing = get_post_meta($image_id, 'clearph_grid_sizing', true);
+        // Gallery-scoped sizing
+        if ($post_id) {
+            $all_sizing = get_post_meta($post_id, '_clearph_image_sizing', true);
+            if (is_array($all_sizing) && isset($all_sizing[strval($image_id)])) {
+                $s = $all_sizing[strval($image_id)];
+                wp_send_json_success(array(
+                    'image_id'    => $image_id,
+                    'column_span' => $s['column_span'],
+                    'row_span'    => $s['row_span'],
+                    'format'      => 'grid',
+                ));
+            }
+        }
 
+        // Fallback: attachment-level grid sizing (migration path)
+        $grid_sizing = get_post_meta($image_id, 'clearph_grid_sizing', true);
         if ($grid_sizing && isset($grid_sizing['column_span']) && isset($grid_sizing['row_span'])) {
             wp_send_json_success(array(
-                'image_id' => $image_id,
+                'image_id'    => $image_id,
                 'column_span' => $grid_sizing['column_span'],
-                'row_span' => $grid_sizing['row_span'],
-                'format' => 'grid'
+                'row_span'    => $grid_sizing['row_span'],
+                'format'      => 'grid',
             ));
         }
 
-        // Fallback: check for legacy named size and convert
+        // Fallback: legacy named size
         $legacy_size = get_post_meta($image_id, 'clearph_masonry_sizing', true) ?: 'regular';
         $converted = $this->convert_legacy_size_to_grid($legacy_size);
 
         wp_send_json_success(array(
-            'image_id' => $image_id,
+            'image_id'    => $image_id,
             'column_span' => $converted['column_span'],
-            'row_span' => $converted['row_span'],
+            'row_span'    => $converted['row_span'],
             'legacy_size' => $legacy_size,
-            'format' => 'legacy'
+            'format'      => 'legacy',
         ));
     }
 
@@ -214,6 +242,15 @@ class ClearPH_Media_Handler {
         );
 
         return isset($conversion_map[$size]) ? $conversion_map[$size] : $conversion_map['regular'];
+    }
+
+    private function convert_grid_to_legacy_name($column_span, $row_span) {
+        if ($column_span == 2 && $row_span == 2) return 'regular';
+        if ($column_span == 2 && $row_span == 4) return 'tall';
+        if ($column_span == 4 && $row_span == 2) return 'wide';
+        if ($column_span == 4 && $row_span == 4) return 'large';
+        if ($column_span >= 6) return 'xl';
+        return 'xl';
     }
 
     /**
@@ -329,5 +366,88 @@ class ClearPH_Media_Handler {
             'autoplay' => $video_settings['autoplay'],
             'show_badge' => $video_settings['show_badge']
         ));
+    }
+
+    /**
+     * Batch update grid sizing for multiple images in one request.
+     * Stores in gallery-scoped post meta (_clearph_image_sizing).
+     * Expects POST['sizing'] as JSON: { "123": { "column_span": 2, "row_span": 4 }, ... }
+     */
+    public function batch_update_sizing() {
+        check_ajax_referer('clearph_gallery_nonce', 'nonce');
+
+        $post_id    = isset($_POST['post_id']) ? absint($_POST['post_id']) : 0;
+        $sizing_raw = isset($_POST['sizing']) ? wp_unslash($_POST['sizing']) : '';
+        $sizing     = json_decode($sizing_raw, true);
+
+        if (!$post_id || !is_array($sizing) || empty($sizing)) {
+            wp_send_json_error('Invalid sizing data');
+        }
+
+        $all_sizing = get_post_meta($post_id, '_clearph_image_sizing', true);
+        if (!is_array($all_sizing)) $all_sizing = array();
+
+        $results = array();
+
+        foreach ($sizing as $image_id => $dims) {
+            $image_id   = absint($image_id);
+            $col_span   = isset($dims['column_span']) ? absint($dims['column_span']) : 0;
+            $row_span   = isset($dims['row_span']) ? absint($dims['row_span']) : 0;
+
+            if (!$image_id || $col_span < 1 || $col_span > 12 || $row_span < 1 || $row_span > 12) {
+                continue;
+            }
+
+            $all_sizing[strval($image_id)] = array(
+                'column_span' => $col_span,
+                'row_span'    => $row_span,
+            );
+
+            $results[$image_id] = array('column_span' => $col_span, 'row_span' => $row_span);
+        }
+
+        update_post_meta($post_id, '_clearph_image_sizing', $all_sizing);
+
+        wp_send_json_success(array('updated' => $results));
+    }
+
+    /**
+     * Return image dimensions and aspect ratios for a list of attachment IDs.
+     * Expects POST['image_ids'] as JSON array: [123, 456, ...]
+     */
+    public function get_images_metadata() {
+        check_ajax_referer('clearph_gallery_nonce', 'nonce');
+
+        $ids_raw = isset($_POST['image_ids']) ? wp_unslash($_POST['image_ids']) : '';
+        $ids = json_decode($ids_raw, true);
+
+        if (!is_array($ids) || empty($ids)) {
+            wp_send_json_error('Invalid image IDs');
+        }
+
+        $metadata = array();
+
+        foreach ($ids as $id) {
+            $id = absint($id);
+            if (!$id) {
+                continue;
+            }
+
+            $meta = wp_get_attachment_metadata($id);
+            if (!$meta || empty($meta['width']) || empty($meta['height'])) {
+                continue;
+            }
+
+            $w = (int) $meta['width'];
+            $h = (int) $meta['height'];
+
+            $metadata[$id] = array(
+                'width'        => $w,
+                'height'       => $h,
+                'aspect_ratio' => round($w / $h, 3),
+            );
+        }
+
+        wp_send_json_success($metadata);
     }
 }

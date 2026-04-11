@@ -650,6 +650,13 @@
     gap: 12px;
 }
 
+.clearph-layout-bulk-actions {
+    display: flex;
+    gap: 6px;
+    padding-right: 12px;
+    border-right: 1px solid rgba(255, 255, 255, 0.2);
+}
+
 .clearph-order-modal__size-control {
     display: flex;
     align-items: center;

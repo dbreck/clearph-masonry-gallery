@@ -342,11 +342,13 @@ class ClearPH_Gallery_Post_Type
         $youtube_items = get_post_meta($post->ID, '_clearph_youtube_items', true);
         $youtube_sizing = get_post_meta($post->ID, '_clearph_youtube_sizing', true);
         $image_labels = get_post_meta($post->ID, '_clearph_image_labels', true);
+        $image_sizing = get_post_meta($post->ID, '_clearph_image_sizing', true);
 
         if (!$images) $images = array();
         if (!$youtube_items || !is_array($youtube_items)) $youtube_items = array();
         if (!$youtube_sizing || !is_array($youtube_sizing)) $youtube_sizing = array();
         if (!$image_labels || !is_array($image_labels)) $image_labels = array();
+        if (!$image_sizing || !is_array($image_sizing)) $image_sizing = array();
 
         $defaults = array(
             'masonry_enabled' => true,
@@ -401,7 +403,7 @@ class ClearPH_Gallery_Post_Type
                         if (is_string($item_id) && strpos($item_id, 'yt_') === 0) {
                             $this->render_youtube_item($item_id, $youtube_items, $youtube_sizing);
                         } else {
-                            $this->render_image_item($item_id);
+                            $this->render_image_item($item_id, $image_sizing);
                         }
                         ?>
                     <?php endforeach; ?>
@@ -420,6 +422,7 @@ class ClearPH_Gallery_Post_Type
             <input type="hidden" id="youtube_items" name="youtube_items" value="<?php echo esc_attr(wp_json_encode($youtube_items ?: new stdClass())); ?>">
             <input type="hidden" id="youtube_sizing" name="youtube_sizing" value="<?php echo esc_attr(wp_json_encode($youtube_sizing ?: new stdClass())); ?>">
             <input type="hidden" id="image_labels" name="image_labels" value="<?php echo esc_attr(wp_json_encode($image_labels ?: new stdClass())); ?>">
+            <input type="hidden" id="image_sizing" name="image_sizing" value="<?php echo esc_attr(wp_json_encode($image_sizing ?: new stdClass())); ?>">
         </div>
 
         <div id="clearph-order-modal" class="clearph-order-modal" style="display:none" aria-hidden="true" data-mode="order">
@@ -432,6 +435,10 @@ class ClearPH_Gallery_Post_Type
                         <button type="button" class="clearph-mode-btn" data-mode="layout" role="tab" aria-selected="false">Layout</button>
                     </div>
                     <div class="clearph-order-modal__header-tools">
+                        <div class="clearph-layout-bulk-actions" data-tool-layout-only style="display:none">
+                            <button type="button" class="button" id="clearph-randomize-layout" title="Apply random varied layout to all items">Randomize Layout</button>
+                            <button type="button" class="button" id="clearph-smart-layout" title="Size items based on image proportions">Smart Layout</button>
+                        </div>
                         <label class="clearph-order-modal__size-control" data-tool-layout-only style="display:none">
                             Container width
                             <input type="range" id="clearph-layout-width" min="30" max="100" step="5" value="85">
@@ -648,21 +655,46 @@ class ClearPH_Gallery_Post_Type
     <?php
     }
 
-    private function render_image_item($image_id)
+    private function render_image_item($image_id, $image_sizing = array())
     {
         $attachment = get_post($image_id);
         if (!$attachment) return;
 
         $mime_type = get_post_mime_type($image_id);
         $is_video = strpos($mime_type, 'video/') === 0;
-        $masonry_size = get_post_meta($image_id, 'clearph_masonry_sizing', true) ?: 'regular';
+
+        // Read sizing from gallery-scoped data, fall back to legacy attachment meta
+        $sizing = isset($image_sizing[strval($image_id)]) ? $image_sizing[strval($image_id)] : null;
+        $col_span = 2;
+        $row_span = 2;
+        $has_grid_sizing = false;
+        if ($sizing && isset($sizing['column_span']) && isset($sizing['row_span'])) {
+            $col_span = absint($sizing['column_span']);
+            $row_span = absint($sizing['row_span']);
+            $masonry_size = $this->convert_grid_to_legacy_size($col_span, $row_span);
+            $has_grid_sizing = true;
+        } else {
+            // Legacy fallback: check attachment meta
+            $grid_sizing = get_post_meta($image_id, 'clearph_grid_sizing', true);
+            if ($grid_sizing && isset($grid_sizing['column_span']) && isset($grid_sizing['row_span'])) {
+                $col_span = absint($grid_sizing['column_span']);
+                $row_span = absint($grid_sizing['row_span']);
+                $masonry_size = $this->convert_grid_to_legacy_size($col_span, $row_span);
+                $has_grid_sizing = true;
+            } else {
+                $masonry_size = get_post_meta($image_id, 'clearph_masonry_sizing', true) ?: 'regular';
+                $converted = $this->convert_legacy_name_to_grid($masonry_size);
+                $col_span = $converted['column_span'];
+                $row_span = $converted['row_span'];
+            }
+        }
         $filename = basename(get_attached_file($image_id));
 
         if ($is_video) {
             $video_url = wp_get_attachment_url($image_id);
             if (!$video_url) return;
     ?>
-        <div class="gallery-item size-<?php echo esc_attr($masonry_size); ?>" data-id="<?php echo $image_id; ?>" data-type="video">
+        <div class="gallery-item size-<?php echo esc_attr($masonry_size); ?>" data-id="<?php echo $image_id; ?>" data-type="video"<?php if ($has_grid_sizing) echo ' style="grid-column: span ' . $col_span . '; grid-row: span ' . $row_span . ';"'; ?>>
             <div class="image-container">
                 <video src="<?php echo esc_url($video_url); ?>" muted preload="metadata"></video>
                 <span class="video-badge">&#9654;</span>
@@ -670,22 +702,22 @@ class ClearPH_Gallery_Post_Type
             <button type="button" class="remove-item">&times;</button>
             <div class="item-controls">
                 <div class="masonry-controls">
-                    <button type="button" class="size-btn <?php echo $masonry_size === 'regular' ? 'active' : ''; ?>" data-size="regular">R</button>
-                    <button type="button" class="size-btn <?php echo $masonry_size === 'tall' ? 'active' : ''; ?>" data-size="tall">T</button>
-                    <button type="button" class="size-btn <?php echo $masonry_size === 'wide' ? 'active' : ''; ?>" data-size="wide">W</button>
-                    <button type="button" class="size-btn <?php echo $masonry_size === 'large' ? 'active' : ''; ?>" data-size="large">L</button>
-                    <button type="button" class="size-btn <?php echo $masonry_size === 'xl' ? 'active' : ''; ?>" data-size="xl">XL</button>
+                    <button type="button" class="size-btn <?php echo !$has_grid_sizing && $masonry_size === 'regular' ? 'active' : ''; ?>" data-size="regular">R</button>
+                    <button type="button" class="size-btn <?php echo !$has_grid_sizing && $masonry_size === 'tall' ? 'active' : ''; ?>" data-size="tall">T</button>
+                    <button type="button" class="size-btn <?php echo !$has_grid_sizing && $masonry_size === 'wide' ? 'active' : ''; ?>" data-size="wide">W</button>
+                    <button type="button" class="size-btn <?php echo !$has_grid_sizing && $masonry_size === 'large' ? 'active' : ''; ?>" data-size="large">L</button>
+                    <button type="button" class="size-btn <?php echo !$has_grid_sizing && $masonry_size === 'xl' ? 'active' : ''; ?>" data-size="xl">XL</button>
                 </div>
                 <div class="grid-sizing-controls" style="margin-top: 8px;">
                     <div style="display: flex; gap: 8px; align-items: center; justify-content: center;">
                         <label style="display: flex; flex-direction: column; align-items: center; gap: 2px;">
                             <span style="font-size: 9px; color: #fff; opacity: 0.8;">Width</span>
-                            <input type="number" class="grid-column-input" min="1" max="12" value="2"
+                            <input type="number" class="grid-column-input" min="1" max="12" value="<?php echo esc_attr($col_span); ?>"
                                    style="width: 40px; height: 24px; text-align: center; font-size: 11px; border: 1px solid #fff; background: rgba(255,255,255,0.2); color: #fff; border-radius: 2px;" />
                         </label>
                         <label style="display: flex; flex-direction: column; align-items: center; gap: 2px;">
                             <span style="font-size: 9px; color: #fff; opacity: 0.8;">Height</span>
-                            <input type="number" class="grid-row-input" min="1" max="12" value="2"
+                            <input type="number" class="grid-row-input" min="1" max="12" value="<?php echo esc_attr($row_span); ?>"
                                    style="width: 40px; height: 24px; text-align: center; font-size: 11px; border: 1px solid #fff; background: rgba(255,255,255,0.2); color: #fff; border-radius: 2px;" />
                         </label>
                         <button type="button" class="grid-apply-btn"
@@ -744,29 +776,29 @@ class ClearPH_Gallery_Post_Type
             $image = wp_get_attachment_image_src($image_id, 'medium');
             if (!$image) return;
     ?>
-        <div class="gallery-item size-<?php echo esc_attr($masonry_size); ?>" data-id="<?php echo $image_id; ?>" data-type="image">
+        <div class="gallery-item size-<?php echo esc_attr($masonry_size); ?>" data-id="<?php echo $image_id; ?>" data-type="image"<?php if ($has_grid_sizing) echo ' style="grid-column: span ' . $col_span . '; grid-row: span ' . $row_span . ';"'; ?>>
             <div class="image-container">
                 <img src="<?php echo $image[0]; ?>" alt="">
             </div>
             <button type="button" class="remove-item">&times;</button>
             <div class="item-controls">
                 <div class="masonry-controls">
-                    <button type="button" class="size-btn <?php echo $masonry_size === 'regular' ? 'active' : ''; ?>" data-size="regular">R</button>
-                    <button type="button" class="size-btn <?php echo $masonry_size === 'tall' ? 'active' : ''; ?>" data-size="tall">T</button>
-                    <button type="button" class="size-btn <?php echo $masonry_size === 'wide' ? 'active' : ''; ?>" data-size="wide">W</button>
-                    <button type="button" class="size-btn <?php echo $masonry_size === 'large' ? 'active' : ''; ?>" data-size="large">L</button>
-                    <button type="button" class="size-btn <?php echo $masonry_size === 'xl' ? 'active' : ''; ?>" data-size="xl">XL</button>
+                    <button type="button" class="size-btn <?php echo !$has_grid_sizing && $masonry_size === 'regular' ? 'active' : ''; ?>" data-size="regular">R</button>
+                    <button type="button" class="size-btn <?php echo !$has_grid_sizing && $masonry_size === 'tall' ? 'active' : ''; ?>" data-size="tall">T</button>
+                    <button type="button" class="size-btn <?php echo !$has_grid_sizing && $masonry_size === 'wide' ? 'active' : ''; ?>" data-size="wide">W</button>
+                    <button type="button" class="size-btn <?php echo !$has_grid_sizing && $masonry_size === 'large' ? 'active' : ''; ?>" data-size="large">L</button>
+                    <button type="button" class="size-btn <?php echo !$has_grid_sizing && $masonry_size === 'xl' ? 'active' : ''; ?>" data-size="xl">XL</button>
                 </div>
                 <div class="grid-sizing-controls" style="margin-top: 8px;">
                     <div style="display: flex; gap: 8px; align-items: center; justify-content: center;">
                         <label style="display: flex; flex-direction: column; align-items: center; gap: 2px;">
                             <span style="font-size: 9px; color: #fff; opacity: 0.8;">Width</span>
-                            <input type="number" class="grid-column-input" min="1" max="12" value="2"
+                            <input type="number" class="grid-column-input" min="1" max="12" value="<?php echo esc_attr($col_span); ?>"
                                    style="width: 40px; height: 24px; text-align: center; font-size: 11px; border: 1px solid #fff; background: rgba(255,255,255,0.2); color: #fff; border-radius: 2px;" />
                         </label>
                         <label style="display: flex; flex-direction: column; align-items: center; gap: 2px;">
                             <span style="font-size: 9px; color: #fff; opacity: 0.8;">Height</span>
-                            <input type="number" class="grid-row-input" min="1" max="12" value="2"
+                            <input type="number" class="grid-row-input" min="1" max="12" value="<?php echo esc_attr($row_span); ?>"
                                    style="width: 40px; height: 24px; text-align: center; font-size: 11px; border: 1px solid #fff; background: rgba(255,255,255,0.2); color: #fff; border-radius: 2px;" />
                         </label>
                         <button type="button" class="grid-apply-btn"
@@ -959,9 +991,49 @@ class ClearPH_Gallery_Post_Type
             }
         }
 
+        // Save image sizing (per-gallery sizing stored as JSON)
+        if (isset($_POST['image_sizing'])) {
+            $raw_sizing = json_decode(stripslashes($_POST['image_sizing']), true);
+            if (is_array($raw_sizing)) {
+                $sanitized_sizing = array();
+                foreach ($raw_sizing as $item_id => $dims) {
+                    $item_id = sanitize_text_field($item_id);
+                    if (empty($item_id)) continue;
+                    $col = isset($dims['column_span']) ? absint($dims['column_span']) : 0;
+                    $row = isset($dims['row_span']) ? absint($dims['row_span']) : 0;
+                    if ($col < 1 || $col > 12 || $row < 1 || $row > 12) continue;
+                    $sanitized_sizing[$item_id] = array(
+                        'column_span' => $col,
+                        'row_span'    => $row,
+                    );
+                }
+                update_post_meta($post_id, '_clearph_image_sizing', $sanitized_sizing);
+            }
+        }
+
         // Debug log
         if (defined('WP_DEBUG') && WP_DEBUG) {
             error_log('Gallery ' . $post_id . ' settings saved: ' . print_r($settings, true));
         }
+    }
+
+    private function convert_grid_to_legacy_size($column_span, $row_span) {
+        if ($column_span == 2 && $row_span == 2) return 'regular';
+        if ($column_span == 2 && $row_span == 4) return 'tall';
+        if ($column_span == 4 && $row_span == 2) return 'wide';
+        if ($column_span == 4 && $row_span == 4) return 'large';
+        if ($column_span >= 6) return 'xl';
+        return 'xl';
+    }
+
+    private function convert_legacy_name_to_grid($size) {
+        $map = array(
+            'regular' => array('column_span' => 2, 'row_span' => 2),
+            'tall'    => array('column_span' => 2, 'row_span' => 4),
+            'wide'    => array('column_span' => 4, 'row_span' => 2),
+            'large'   => array('column_span' => 4, 'row_span' => 4),
+            'xl'      => array('column_span' => 6, 'row_span' => 6),
+        );
+        return isset($map[$size]) ? $map[$size] : $map['regular'];
     }
 }

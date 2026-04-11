@@ -147,6 +147,10 @@ class ClearPH_Frontend
         $image_labels = get_post_meta($gallery_id, '_clearph_image_labels', true);
         if (!$image_labels || !is_array($image_labels)) $image_labels = array();
 
+        // Load per-gallery image sizing
+        $image_sizing = get_post_meta($gallery_id, '_clearph_image_sizing', true);
+        if (!$image_sizing || !is_array($image_sizing)) $image_sizing = array();
+
         // Build output
         $html = '';
 
@@ -177,7 +181,7 @@ class ClearPH_Frontend
             if (is_string($item_id) && strpos($item_id, 'yt_') === 0) {
                 $html .= $this->render_youtube_gallery_item($item_id, $youtube_items, $youtube_sizing, $settings, $gallery_group, $lightbox_enabled, $gallery_id, $image_labels);
             } else {
-                $html .= $this->render_gallery_item($item_id, $settings, $gallery_group, $lightbox_enabled, $gallery_id, $image_labels);
+                $html .= $this->render_gallery_item($item_id, $settings, $gallery_group, $lightbox_enabled, $gallery_id, $image_labels, $image_sizing);
             }
         }
 
@@ -322,29 +326,37 @@ class ClearPH_Frontend
         return $data;
     }
 
-    private function render_gallery_item($image_id, $settings, $gallery_group, $lightbox_enabled, $gallery_id, $image_labels = array())
+    private function render_gallery_item($image_id, $settings, $gallery_group, $lightbox_enabled, $gallery_id, $image_labels = array(), $image_sizing = array())
     {
         $mime_type = get_post_mime_type($image_id);
         $is_video = strpos($mime_type, 'video/') === 0;
 
-        // Check for new grid sizing format first
-        $grid_sizing = get_post_meta($image_id, 'clearph_grid_sizing', true);
-
         $column_span = null;
         $row_span = null;
-        $masonry_size = 'regular'; // Default fallback
+        $masonry_size = 'regular';
         $inline_style = '';
 
-        if ($grid_sizing && isset($grid_sizing['column_span']) && isset($grid_sizing['row_span'])) {
-            $column_span = absint($grid_sizing['column_span']);
-            $row_span = absint($grid_sizing['row_span']);
+        // 1. Gallery-scoped sizing (preferred)
+        $sizing = isset($image_sizing[strval($image_id)]) ? $image_sizing[strval($image_id)] : null;
+        if ($sizing && isset($sizing['column_span']) && isset($sizing['row_span'])) {
+            $column_span = absint($sizing['column_span']);
+            $row_span = absint($sizing['row_span']);
+        } else {
+            // 2. Fallback: attachment-level grid sizing (migration path)
+            $grid_sizing = get_post_meta($image_id, 'clearph_grid_sizing', true);
+            if ($grid_sizing && isset($grid_sizing['column_span']) && isset($grid_sizing['row_span'])) {
+                $column_span = absint($grid_sizing['column_span']);
+                $row_span = absint($grid_sizing['row_span']);
+            }
+        }
 
+        if ($column_span && $row_span) {
             if ($settings['masonry_enabled']) {
                 $inline_style = sprintf('grid-column: span %d; grid-row: span %d;', $column_span, $row_span);
             }
-
             $masonry_size = $this->convert_grid_to_legacy_size($column_span, $row_span);
         } else {
+            // 3. Fallback: legacy named size
             $masonry_size = get_post_meta($image_id, 'clearph_masonry_sizing', true) ?: 'regular';
         }
 
