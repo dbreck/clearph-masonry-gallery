@@ -279,27 +279,62 @@ jQuery(document).ready(function ($) {
     $filters.find(".filter-btn").removeClass("active")
     $btn.addClass("active")
 
+    const isShowAll = filter === "*"
+
+    // Save original grid spans on first filter activation
+    if (!$gallery.data("original-spans-saved")) {
+      $gallery.find(".gallery-item").each(function () {
+        const $item = $(this)
+        $item.data("original-grid-column", $item[0].style.gridColumn || "")
+        $item.data("original-grid-row", $item[0].style.gridRow || "")
+      })
+      $gallery.data("original-spans-saved", true)
+    }
+
     // Filter gallery items
     $gallery.find(".gallery-item").each(function () {
       const $item = $(this)
       const category = $item.data("category") || ""
-
-      const show = filter === "*" || category === filter
+      const show = isShowAll || category === filter
 
       if (show) {
         $item.css("display", "")
-
-        if (typeof gsap !== "undefined") {
-          gsap.fromTo(
-            $item[0],
-            { opacity: 0, y: 20, scale: 0.95 },
-            { opacity: 1, y: 0, scale: 1, duration: 0.5, ease: "power2.out" }
-          )
-        } else {
-          $item.addClass("animate-in")
-        }
       } else {
         $item.css("display", "none")
+      }
+    })
+
+    if (isShowAll) {
+      // Restore original grid spans
+      $gallery.find(".gallery-item").each(function () {
+        const $item = $(this)
+        $item[0].style.gridColumn = $item.data("original-grid-column") || ""
+        $item[0].style.gridRow = $item.data("original-grid-row") || ""
+      })
+    } else {
+      // Set visible items to uniform sizing (1 visual col = 2 micro-cols, 2 rows)
+      $gallery.find(".gallery-item").each(function () {
+        const $item = $(this)
+        if ($item.css("display") !== "none") {
+          $item[0].style.gridColumn = "span 2"
+          $item[0].style.gridRow = "span 2"
+        }
+      })
+    }
+
+    // Animate visible items
+    $gallery.find(".gallery-item").each(function () {
+      const $item = $(this)
+      if ($item.css("display") === "none") return
+
+      if (typeof gsap !== "undefined") {
+        gsap.fromTo(
+          $item[0],
+          { opacity: 0, y: 20, scale: 0.95 },
+          { opacity: 1, y: 0, scale: 1, duration: 0.5, ease: "power2.out" }
+        )
+      } else {
+        $item.addClass("animate-in")
       }
     })
   })
