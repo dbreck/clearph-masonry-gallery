@@ -125,6 +125,7 @@ class ClearPH_Gallery_Post_Type
             'column_margin' => '20px',
             'filter_enabled' => false,
             'filter_categories' => 'Residences, Amenities, Lifestyle, Local',
+            'filter_all_last' => false,
             'label_show' => false,
             'label_show_on_hover' => false,
             'label_placement' => 'bottom-center',
@@ -235,6 +236,13 @@ class ClearPH_Gallery_Post_Type
                 <td>
                     <input type="text" id="filter_categories" name="filter_categories" value="<?php echo esc_attr($settings['filter_categories']); ?>" style="width: 100%; max-width: 500px;">
                     <p class="description">Comma-separated list of categories (e.g., "Residences, Amenities, Lifestyle, Local")</p>
+                </td>
+            </tr>
+            <tr>
+                <th><label for="filter_all_last">All Link Position</label></th>
+                <td>
+                    <input type="checkbox" id="filter_all_last" name="filter_all_last" value="1" <?php checked($settings['filter_all_last']); ?>>
+                    <label for="filter_all_last">Place "All" link at end of filter list</label>
                 </td>
             </tr>
         </table>
@@ -891,6 +899,7 @@ class ClearPH_Gallery_Post_Type
             'column_margin' => sanitize_text_field($_POST['column_margin']),
             'filter_enabled' => isset($_POST['filter_enabled']) ? 1 : 0,
             'filter_categories' => sanitize_text_field($_POST['filter_categories']),
+            'filter_all_last' => isset($_POST['filter_all_last']) ? 1 : 0,
             'label_show' => isset($_POST['label_show']) ? 1 : 0,
             'label_show_on_hover' => isset($_POST['label_show_on_hover']) ? 1 : 0,
             'label_placement' => $this->sanitize_label_placement(isset($_POST['label_placement']) ? $_POST['label_placement'] : ''),

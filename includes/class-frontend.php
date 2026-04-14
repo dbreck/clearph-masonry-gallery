@@ -212,11 +212,21 @@ class ClearPH_Frontend
             return '';
         }
 
+        $all_btn = '<button class="filter-btn active" data-filter="*">All</button>';
+        $all_last = !empty($settings['filter_all_last']);
+
         $html = '<div class="clearph-gallery-filters" data-gallery-id="' . esc_attr($gallery_id) . '">';
-        $html .= '<button class="filter-btn active" data-filter="*">All</button>';
+
+        if (!$all_last) {
+            $html .= $all_btn;
+        }
 
         foreach ($categories as $category) {
             $html .= '<button class="filter-btn" data-filter="' . esc_attr($category) . '">' . esc_html($category) . '</button>';
+        }
+
+        if ($all_last) {
+            $html .= $all_btn;
         }
 
         $html .= '</div>';

@@ -337,6 +337,7 @@
         /* Full width = 2 micro-cols */
         grid-row: span 1 !important;
     }
+
 }
 
 /* Video items */
@@ -425,7 +426,7 @@
 /* ===== Image Labels ===== */
 .clearph-gallery-label {
     position: absolute;
-    margin: 0;
+    margin: 0 !important;
     pointer-events: none;
     z-index: 2;
     line-height: 1.3;
