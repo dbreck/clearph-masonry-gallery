@@ -153,6 +153,7 @@ Different container sizes load different WordPress image sizes for optimization:
   'column_margin' => string (CSS value like '20px'),
   'filter_enabled' => bool,
   'filter_categories' => string (comma-separated),
+  'filter_all_last' => bool,
   'label_show' => bool,
   'label_show_on_hover' => bool,
   'label_placement' => string ('bottom-center'|'bottom-left'|...), // 9 positions
@@ -340,6 +341,12 @@ Shared by both features. Takes a `getSizes(item, remaining, index, items)` callb
 - Updates all source item DOM (inline styles, size class reset, input values)
 - Calls `renderLayoutView()` to refresh Layout mode
 
+## Filter "All" Link Position (v1.7.0)
+
+Gallery setting `filter_all_last` (checkbox). When checked, the "All" filter button renders after all category buttons instead of before them. Default: unchecked (All first, existing behavior).
+
+**Files:** Default + admin UI + save in `class-gallery-post-type.php`, conditional render in `class-frontend.php` `render_category_filters()`.
+
 ## Filter Uniform Grid (v1.6.0)
 
 When a category filter is activated in the public-facing gallery, visible items get **uniform sizing** (`span 2` col × `span 2` row = 1 visual col square) so they always line up cleanly — regardless of the original designed layout.
@@ -389,6 +396,15 @@ wp_register_script('clearph-masonry-frontend', $url, array('jquery', 'gsap'), ..
 ```
 
 The JS already checks `typeof gsap !== "undefined"` before using GSAP and falls back to CSS animations.
+
+### CRITICAL: Label Extra Classes Can Break Positioning
+
+Salient theme classes used in `label_extra_classes` can override label positioning with `!important` rules. Known offenders:
+
+- **`.eyebrow`** — adds `margin-bottom: 50px !important` which pushes absolutely-positioned labels upward (toward center on short mobile cells)
+- **`.caption-overlay`** — adds `left: 50%; transform: translateX(-50%)` (lower specificity, currently overridden by our rules)
+
+**Fix in place (v1.7.0):** `.clearph-gallery-label` uses `margin: 0 !important` to neutralize theme margin overrides. If new theme classes cause similar issues, the pattern is: inspect computed styles on the label element, identify which theme class is injecting unwanted properties, and add `!important` overrides in `gallery.css`.
 
 ## Content Protection
 

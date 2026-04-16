@@ -460,10 +460,15 @@ class ClearPH_Gallery_Post_Type
                         <button type="button" class="button" id="clearph-order-modal-cancel">Cancel</button>
                     </div>
                 </div>
-                <div class="clearph-order-modal__hint" data-hint-order>Drag tiles to reorder. Left to right, top to bottom is the final order. Changes are not saved until you click Save &amp; Close.</div>
+                <div class="clearph-order-modal__hint" data-hint-order>Drag tiles to reorder (left to right, top to bottom). Click a tile to edit its settings in the right panel. Order changes are saved when you click Save &amp; Close; settings save automatically.</div>
                 <div class="clearph-order-modal__hint" data-hint-layout style="display:none">Click a tile to edit its size and settings in the right panel. Changes save automatically.</div>
 
+                <div class="clearph-order-modal__main">
                 <div class="clearph-order-modal__body clearph-order-modal__body--order">
+                    <div class="clearph-order-modal__filter-bar" id="clearph-order-filter-bar" style="display:none">
+                        <span class="clearph-order-modal__filter-label">Filter by category:</span>
+                        <div class="clearph-order-modal__filter-buttons" id="clearph-order-filter-buttons"></div>
+                    </div>
                     <div id="clearph-order-modal-grid" class="clearph-order-modal__grid"></div>
                 </div>
 
@@ -471,7 +476,9 @@ class ClearPH_Gallery_Post_Type
                     <div class="clearph-order-modal__layout-scroll">
                         <div id="clearph-layout-grid" class="clearph-order-modal__layout-grid"></div>
                     </div>
-                    <aside id="clearph-layout-panel" class="clearph-order-modal__panel">
+                </div>
+
+                <aside id="clearph-layout-panel" class="clearph-order-modal__panel">
                         <div class="clearph-layout-panel__empty">Select a tile to edit its settings.</div>
                         <div class="clearph-layout-panel__content" style="display:none">
                             <div class="clearph-layout-panel__preview"></div>

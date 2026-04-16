@@ -1009,6 +1009,7 @@ jQuery(document).ready(function ($) {
     // ===== Order Visually / Layout Modal =====
     orderModalMode: "order",
     orderModalSelectedId: null,
+    orderModalFilter: "*",
 
     bindOrderVisually: function () {
       $(document).on("click", "#order-visually", (e) => {
@@ -1053,10 +1054,63 @@ jQuery(document).ready(function ($) {
         this.switchModalMode(mode)
       })
 
+      // Order mode: category filter button
+      $(document).on("click", ".clearph-order-filter-btn", (e) => {
+        e.preventDefault()
+        const value = $(e.currentTarget).attr("data-filter")
+        this.applyOrderModalFilter(value)
+      })
+
+      // Order mode: remove tile (also removes source item so delete persists on save)
+      $(document).on("mousedown", ".clearph-order-tile__remove", (e) => {
+        // Prevent sortable from picking up the drag when clicking the remove button
+        e.stopPropagation()
+      })
+      $(document).on("click", ".clearph-order-tile__remove", (e) => {
+        e.preventDefault()
+        e.stopPropagation()
+        const $tile = $(e.currentTarget).closest(".clearph-order-tile")
+        const id = String($tile.attr("data-id") || "")
+        if (!id) return
+
+        this.saveCurrentOrder()
+
+        // Clean up YouTube-specific data if applicable
+        if (id.indexOf("yt_") === 0) {
+          this.removeYouTubeData(id)
+        }
+
+        // Remove from source grid so Save and mode switches reflect the deletion
+        this.getSourceItem(id).remove()
+
+        // Remove from modal grid + refresh
+        $tile.remove()
+        this.clearActiveOrderingButtons()
+        this.updateImageOrder()
+        this.refreshOrderModalIndexes()
+        const $grid = $("#clearph-order-modal-grid")
+        if ($grid.data("ui-sortable")) $grid.sortable("refresh")
+        this.renderOrderFilterBar()
+
+        // If the deleted item was currently selected in the panel, clear it
+        if (this.orderModalSelectedId === id) {
+          this.orderModalSelectedId = null
+          this.showLayoutPanelEmpty()
+        }
+      })
+
       // Layout tile click = select
       $(document).on("click", ".clearph-layout-tile", (e) => {
         const id = $(e.currentTarget).attr("data-id")
         this.selectLayoutTile(id)
+      })
+
+      // Order tile click = select (ignore synthetic click that fires after a drag)
+      $(document).on("click", ".clearph-order-tile", (e) => {
+        if (this.orderDragActive) return
+        if ($(e.target).closest(".clearph-order-tile__remove").length) return
+        const id = $(e.currentTarget).attr("data-id")
+        if (id) this.selectLayoutTile(id)
       })
 
       // Layout panel: preset size buttons
@@ -1201,10 +1255,12 @@ jQuery(document).ready(function ($) {
         const $item = $(this)
         const id = $item.data("id")
         const type = $item.data("type") || "image"
+        const category = $item.find(".image-category-select").val() || ""
 
         const $tile = $('<div class="clearph-order-tile"></div>')
           .attr("data-id", id)
           .attr("data-type", type)
+          .attr("data-category", category)
 
         const $img = $item.find(".image-container img").first()
         const $video = $item.find(".image-container video").first()
@@ -1221,6 +1277,7 @@ jQuery(document).ready(function ($) {
         }
 
         $tile.append('<span class="clearph-order-tile__index">' + (index + 1) + "</span>")
+        $tile.append('<button type="button" class="clearph-order-tile__remove" aria-label="Remove item" title="Remove item">&times;</button>')
 
         if (type === "video") {
           $tile.append('<span class="clearph-order-tile__badge clearph-order-tile__badge--video">Video</span>')
@@ -1236,12 +1293,102 @@ jQuery(document).ready(function ($) {
         $grid.sortable("destroy")
       }
       $grid.sortable({
-        items: "> .clearph-order-tile",
+        items: "> .clearph-order-tile:visible",
         tolerance: "pointer",
         forcePlaceholderSize: true,
         placeholder: "clearph-order-modal__placeholder",
+        start: () => { this.orderDragActive = true },
+        stop: () => {
+          // Keep the flag set briefly so the synthetic click after drop doesn't select the tile
+          setTimeout(() => { this.orderDragActive = false }, 50)
+        },
         update: () => this.refreshOrderModalIndexes(),
       })
+
+      // Build the category filter bar and re-apply current filter
+      this.renderOrderFilterBar()
+      this.applyOrderModalFilter(this.orderModalFilter || "*")
+
+      // Populate panel category options and restore selection if the selected id still exists
+      this.populateLayoutCategoryOptions()
+      if (this.orderModalSelectedId && $('.clearph-order-tile[data-id="' + this.orderModalSelectedId + '"]').length) {
+        this.selectLayoutTile(this.orderModalSelectedId)
+      } else {
+        this.orderModalSelectedId = null
+        this.showLayoutPanelEmpty()
+      }
+    },
+
+    renderOrderFilterBar: function () {
+      const $bar = $("#clearph-order-filter-bar")
+      const $buttons = $("#clearph-order-filter-buttons").empty()
+
+      const categoriesStr = $("#filter_categories").val() || ""
+      const configured = categoriesStr.split(",").map((c) => c.trim()).filter(Boolean)
+
+      // Detect which categories are actually used by tiles (so we can show an Uncategorized bucket when relevant)
+      let hasUncategorized = false
+      const usedSet = new Set()
+      $("#clearph-order-modal-grid > .clearph-order-tile").each(function () {
+        const cat = $(this).attr("data-category") || ""
+        if (cat) usedSet.add(cat)
+        else hasUncategorized = true
+      })
+
+      // If there are no categories configured AND nothing is uncategorized, hide the bar entirely
+      if (!configured.length && !usedSet.size) {
+        $bar.hide()
+        return
+      }
+      $bar.show()
+
+      const current = this.orderModalFilter || "*"
+      const addBtn = (value, label) => {
+        const $b = $('<button type="button" class="clearph-order-filter-btn"></button>')
+          .attr("data-filter", value)
+          .text(label)
+        if (value === current) $b.addClass("is-active")
+        $buttons.append($b)
+      }
+
+      addBtn("*", "All")
+      configured.forEach((cat) => addBtn(cat, cat))
+      // Include any categories present on tiles but missing from configured list (e.g. after a rename)
+      usedSet.forEach((cat) => {
+        if (!configured.includes(cat)) addBtn(cat, cat)
+      })
+      if (hasUncategorized) addBtn("__none__", "Uncategorized")
+    },
+
+    applyOrderModalFilter: function (value) {
+      this.orderModalFilter = value || "*"
+
+      $(".clearph-order-filter-btn")
+        .removeClass("is-active")
+        .filter('[data-filter="' + this.orderModalFilter.replace(/"/g, '\\"') + '"]')
+        .addClass("is-active")
+
+      const $tiles = $("#clearph-order-modal-grid > .clearph-order-tile")
+      if (this.orderModalFilter === "*") {
+        $tiles.show()
+      } else if (this.orderModalFilter === "__none__") {
+        $tiles.each(function () {
+          const cat = $(this).attr("data-category") || ""
+          $(this).toggle(cat === "")
+        })
+      } else {
+        $tiles.each(function () {
+          const cat = $(this).attr("data-category") || ""
+          $(this).toggle(cat === value)
+        })
+      }
+
+      // Sortable uses `:visible` items; refreshing tells it to re-scan
+      const $grid = $("#clearph-order-modal-grid")
+      if ($grid.data("ui-sortable")) $grid.sortable("refresh")
+
+      // Global indexes stay correct after show/hide (they reflect DOM order). Just recompute to be safe.
+      this.refreshOrderModalIndexes()
     },
 
     renderLayoutView: function () {
@@ -1342,8 +1489,8 @@ jQuery(document).ready(function ($) {
     },
 
     selectLayoutTile: function (id) {
-      $(".clearph-layout-tile").removeClass("is-selected")
-      $('.clearph-layout-tile[data-id="' + id + '"]').addClass("is-selected")
+      $(".clearph-layout-tile, .clearph-order-tile").removeClass("is-selected")
+      $('.clearph-layout-tile[data-id="' + id + '"], .clearph-order-tile[data-id="' + id + '"]').addClass("is-selected")
       this.orderModalSelectedId = id
       this.populateLayoutPanel(id)
     },
@@ -1522,6 +1669,7 @@ jQuery(document).ready(function ($) {
       // Reset mode to Order every open
       this.orderModalMode = "order"
       this.orderModalSelectedId = null
+      this.orderModalFilter = "*"
       $("#clearph-order-modal").attr("data-mode", "order")
       $(".clearph-mode-btn").removeClass("is-active").attr("aria-selected", "false")
       $('.clearph-mode-btn[data-mode="order"]').addClass("is-active").attr("aria-selected", "true")
@@ -1563,8 +1711,11 @@ jQuery(document).ready(function ($) {
       }
       $grid.empty()
       $("#clearph-layout-grid").empty()
+      $("#clearph-order-filter-buttons").empty()
+      $("#clearph-order-filter-bar").hide()
       this.orderModalSelectedId = null
       this.orderModalMode = "order"
+      this.orderModalFilter = "*"
       $("#clearph-order-modal-cancel").text("Cancel")
       this.showLayoutPanelEmpty()
     },
