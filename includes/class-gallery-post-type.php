@@ -128,6 +128,7 @@ class ClearPH_Gallery_Post_Type
             'filter_all_last' => false,
             'label_show' => false,
             'label_show_on_hover' => false,
+            'label_show_on_lightbox' => false,
             'label_placement' => 'bottom-center',
             'label_tag' => 'p',
             'label_extra_classes' => '',
@@ -256,11 +257,15 @@ class ClearPH_Gallery_Post_Type
                         <input type="checkbox" id="label_show" name="label_show" value="1" <?php checked($settings['label_show']); ?>>
                         Show labels
                     </label>
-                    <label style="display: block;">
+                    <label style="display: block; margin-bottom: 6px;">
                         <input type="checkbox" id="label_show_on_hover" name="label_show_on_hover" value="1" <?php checked($settings['label_show_on_hover']); ?>>
                         Show labels on hover only
                     </label>
-                    <p class="description">Check one or both. If neither is checked, labels are hidden.</p>
+                    <label style="display: block;">
+                        <input type="checkbox" id="label_show_on_lightbox" name="label_show_on_lightbox" value="1" <?php checked($settings['label_show_on_lightbox']); ?>>
+                        Show labels on lightbox image
+                    </label>
+                    <p class="description">Check one or both of the first two for in-grid display. If neither is checked, grid labels are hidden. The lightbox option is independent and uses the label text as the lightbox caption.</p>
                 </td>
             </tr>
             <tr class="clearph-label-options">
@@ -909,6 +914,7 @@ class ClearPH_Gallery_Post_Type
             'filter_all_last' => isset($_POST['filter_all_last']) ? 1 : 0,
             'label_show' => isset($_POST['label_show']) ? 1 : 0,
             'label_show_on_hover' => isset($_POST['label_show_on_hover']) ? 1 : 0,
+            'label_show_on_lightbox' => isset($_POST['label_show_on_lightbox']) ? 1 : 0,
             'label_placement' => $this->sanitize_label_placement(isset($_POST['label_placement']) ? $_POST['label_placement'] : ''),
             'label_tag' => $this->sanitize_label_tag(isset($_POST['label_tag']) ? $_POST['label_tag'] : ''),
             'label_extra_classes' => sanitize_text_field(isset($_POST['label_extra_classes']) ? $_POST['label_extra_classes'] : ''),

@@ -5,6 +5,13 @@ All notable changes to this project are documented in this file.
 The format loosely follows [Keep a Changelog](https://keepachangelog.com/) and this
 project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.9.0] — 2026-04-20
+
+### Features
+- New "Show labels on lightbox image" checkbox under Image Labels → Label Visibility. When enabled, the FancyBox caption uses the per-image label text instead of the attachment alt text. Independent of the in-grid visibility checkboxes.
+- Plugin now sets `data-show-lightbox-captions` on the gallery wrapper and applies `clearph-fancybox-captioned` as the FancyBox `baseClass` when the setting is on, with matching CSS that re-reveals the caption in case a host theme has hidden `.fancybox-caption--separate`.
+- New `lightbox_group` shortcode param. Galleries rendered on the same page that share the same `lightbox_group` value are combined into a single FancyBox chain — advancing past the last image of one gallery continues into the next. Omit the param to keep per-gallery lightbox behavior.
+
 ## [1.8.0] — 2026-04-16
 
 ### Features

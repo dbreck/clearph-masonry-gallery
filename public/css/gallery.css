@@ -472,6 +472,16 @@
 .clearph-gallery .clearph-gallery-label--top-center { top: 40px; left: 20px; right: 20px; bottom: auto; text-align: center; transform: none; }
 .clearph-gallery .clearph-gallery-label--top-right  { top: 40px; right: 20px; left: auto; bottom: auto; text-align: right; transform: none; }
 
+/* ===== Lightbox Caption Opt-In ===== */
+/* When a gallery opts into lightbox captions (Show labels on lightbox image),
+   FancyBox's container gets the .clearph-fancybox-captioned baseClass.
+   This rule re-reveals the caption in case a host theme has hidden it. */
+.clearph-fancybox-captioned .fancybox-caption,
+.clearph-fancybox-captioned .fancybox-caption--separate {
+    opacity: 1 !important;
+    visibility: visible !important;
+}
+
 /* Print styles */
 @media print {
     .clearph-gallery {

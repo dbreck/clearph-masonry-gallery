@@ -21,7 +21,8 @@ class ClearPH_Frontend
         $atts = shortcode_atts(array(
             'id' => 0,
             'title' => '',
-            'class' => ''
+            'class' => '',
+            'lightbox_group' => ''
         ), $atts);
 
         $gallery_id = 0;
@@ -51,10 +52,10 @@ class ClearPH_Frontend
         wp_enqueue_script('clearph-masonry-frontend');
         wp_enqueue_style('clearph-masonry-frontend');
 
-        return $this->render_gallery($gallery_id, $settings, $images, $atts['class']);
+        return $this->render_gallery($gallery_id, $settings, $images, $atts['class'], $atts['lightbox_group']);
     }
 
-    private function render_gallery($gallery_id, $settings, $images, $extra_class = '')
+    private function render_gallery($gallery_id, $settings, $images, $extra_class = '', $lightbox_group_override = '')
     {
         $defaults = array(
             'masonry_enabled' => true,
@@ -67,6 +68,7 @@ class ClearPH_Frontend
             'column_margin' => '20px',
             'label_show' => false,
             'label_show_on_hover' => false,
+            'label_show_on_lightbox' => false,
             'label_placement' => 'bottom-center',
             'label_tag' => 'p',
             'label_extra_classes' => '',
@@ -92,24 +94,47 @@ class ClearPH_Frontend
             $gallery_class .= ' ' . sanitize_html_class($extra_class);
         }
 
-        // Generate unique gallery ID for lightbox grouping
-        $gallery_group = 'clearph-gallery-' . $gallery_id;
+        // Lightbox grouping: custom (shared across galleries) or per-gallery default
+        if (!empty($lightbox_group_override)) {
+            $gallery_group = 'clearph-lightbox-' . sanitize_html_class($lightbox_group_override);
+        } else {
+            $gallery_group = 'clearph-gallery-' . $gallery_id;
+        }
+
+        // Load per-image labels (used both for in-grid labels and optional lightbox captions)
+        $image_labels = get_post_meta($gallery_id, '_clearph_image_labels', true);
+        if (!$image_labels || !is_array($image_labels)) $image_labels = array();
+
+        $use_labels_for_lightbox = !empty($settings['label_show_on_lightbox']);
 
         // If lightbox is enabled, store data for JavaScript to handle
         if ($lightbox_enabled) {
-            $this->lightbox_data[$gallery_group] = array();
+            // Initialize only if this group hasn't been seen yet; shared groups append
+            if (!isset($this->lightbox_data[$gallery_group])) {
+                $this->lightbox_data[$gallery_group] = array();
+            }
             // Always use full-size images in the lightbox per requirement
             $lightbox_size = 'full';
             foreach ($images as $item_id) {
+                // Resolve caption: label text (when enabled) overrides alt
+                $label_text = '';
+                if ($use_labels_for_lightbox) {
+                    $label_entry = isset($image_labels[strval($item_id)]) ? $image_labels[strval($item_id)] : null;
+                    if ($label_entry && !empty($label_entry['text'])) {
+                        $label_text = $label_entry['text'];
+                    }
+                }
+
                 // YouTube items
                 if (is_string($item_id) && strpos($item_id, 'yt_') === 0) {
                     $video_id = substr($item_id, 3);
                     $meta = isset($youtube_items[$item_id]) ? $youtube_items[$item_id] : array();
                     $this->lightbox_data[$gallery_group][] = array(
                         'id' => $item_id,
+                        'gallery_id' => $gallery_id,
                         'src' => 'https://www.youtube.com/embed/' . $video_id . '?autoplay=1&rel=0',
                         'type' => 'iframe',
-                        'caption' => ''
+                        'caption' => $use_labels_for_lightbox ? $label_text : ''
                     );
                     continue;
                 }
@@ -118,15 +143,17 @@ class ClearPH_Frontend
                 $mime_type = get_post_mime_type($image_id);
                 $is_video = strpos($mime_type, 'video/') === 0;
                 $alt = get_post_meta($image_id, '_wp_attachment_image_alt', true);
+                $caption = $use_labels_for_lightbox ? $label_text : $alt;
 
                 if ($is_video) {
                     $video_url = wp_get_attachment_url($image_id);
                     if ($video_url) {
                         $this->lightbox_data[$gallery_group][] = array(
                             'id' => $image_id,
+                            'gallery_id' => $gallery_id,
                             'src' => $video_url,
                             'type' => 'video',
-                            'caption' => $alt
+                            'caption' => $caption
                         );
                     }
                 } else {
@@ -134,18 +161,15 @@ class ClearPH_Frontend
                     if ($full_image) {
                         $this->lightbox_data[$gallery_group][] = array(
                             'id' => $image_id,
+                            'gallery_id' => $gallery_id,
                             'src' => $full_image[0],
                             'type' => 'image',
-                            'caption' => $alt
+                            'caption' => $caption
                         );
                     }
                 }
             }
         }
-
-        // Load per-image labels
-        $image_labels = get_post_meta($gallery_id, '_clearph_image_labels', true);
-        if (!$image_labels || !is_array($image_labels)) $image_labels = array();
 
         // Load per-gallery image sizing
         $image_sizing = get_post_meta($gallery_id, '_clearph_image_sizing', true);
@@ -169,6 +193,7 @@ class ClearPH_Frontend
         $html .= ' data-column-margin="' . esc_attr($settings['column_margin']) . '"';
         $html .= ' data-gallery-group="' . esc_attr($gallery_group) . '"';
         $html .= ' data-gallery-id="' . esc_attr($gallery_id) . '"';
+        $html .= ' data-show-lightbox-captions="' . ($use_labels_for_lightbox ? 'true' : 'false') . '"';
         if (!empty($settings['label_show'])) {
             $html .= ' data-label-show="1"';
         }
@@ -600,7 +625,10 @@ class ClearPH_Frontend
                     var video = $(this).find('video')[0];
                     if (video) video.pause();
 
-                    const galleryGroup = $(this).closest('.clearph-gallery').data('gallery-group');
+                    const $galleryEl = $(this).closest('.clearph-gallery');
+                    const galleryGroup = $galleryEl.data('gallery-group');
+                    const sourceGalleryId = $galleryEl.data('gallery-id');
+                    const showCaptions = $galleryEl.data('show-lightbox-captions') === true || $galleryEl.data('show-lightbox-captions') === 'true';
                     const imageId = $(this).data('image-id');
                     const lightboxData = window.clearphLightboxData[galleryGroup];
 
@@ -609,10 +637,11 @@ class ClearPH_Frontend
                         return;
                     }
 
-                    // Find current image index
+                    // Find current image index (match on source gallery + image id, so
+                    // shared lightbox groups don't jump to a duplicate in another gallery)
                     let currentIndex = 0;
                     for (let i = 0; i < lightboxData.length; i++) {
-                        if (lightboxData[i].id == imageId) {
+                        if (lightboxData[i].id == imageId && (lightboxData[i].gallery_id == sourceGalleryId || typeof lightboxData[i].gallery_id === 'undefined')) {
                             currentIndex = i;
                             break;
                         }
@@ -648,6 +677,7 @@ class ClearPH_Frontend
                             caption: item.caption || ''
                         };
                     }), {
+                        baseClass: showCaptions ? 'clearph-fancybox-captioned' : '',
                         buttons: buttons,
                         loop: true,
                         protect: <?php echo is_user_logged_in() ? 'false' : 'true'; ?>,
