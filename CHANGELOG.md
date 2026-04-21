@@ -5,6 +5,12 @@ All notable changes to this project are documented in this file.
 The format loosely follows [Keep a Changelog](https://keepachangelog.com/) and this
 project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.9.2] — 2026-04-21
+
+### Fixes
+- Blurry images in tall cover-fit cells: `sizes` attribute is now aspect-ratio aware. When a cell is narrower than the source image's aspect (portrait cell + landscape photo), the `vw` breakpoints are inflated so the browser picks a srcset candidate with enough resolution to cover the cell's height. Applies to both the grid-span sizing system and legacy named sizes (Regular/Tall/Wide/Large/XL).
+- WordPress 6.7+ was prepending `sizes="auto, ..."` to gallery images via `wp_img_tag_add_auto_sizes()`. The `auto` keyword resolved to the image's rendered CSS width and overrode our calculated breakpoints, defeating the aspect-aware fix. The plugin now strips the `auto, ` prefix from its own images via the `wp_content_img_tag` filter (scoped by the `lazy-image` class, so non-gallery images are untouched).
+
 ## [1.9.0] — 2026-04-20
 
 ### Features

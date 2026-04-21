@@ -12,6 +12,25 @@ class ClearPH_Frontend
 
         // Fix RankMath VideoObject schema — inject thumbnailUrl for YouTube embeds
         add_filter('rank_math/json_ld', array($this, 'fix_video_schema_thumbnails'), 99, 2);
+
+        // Strip WP 6.7+ "auto, " prefix from our gallery image sizes attributes —
+        // it resolves to the img's rendered CSS width and overrides our vw breakpoints,
+        // defeating the aspect-aware sizes logic (blurry images in tall cover-fit cells).
+        add_filter('wp_content_img_tag', array($this, 'strip_auto_sizes_from_gallery_images'), 20, 1);
+    }
+
+    /**
+     * Remove the "auto, " prefix from sizes attribute on gallery images so our
+     * calculated vw breakpoints are used for srcset selection.
+     */
+    public function strip_auto_sizes_from_gallery_images($filtered_image)
+    {
+        // Only touch our gallery images (identified by the lazy-image class)
+        if (strpos($filtered_image, 'lazy-image') === false) {
+            return $filtered_image;
+        }
+
+        return preg_replace('/(\bsizes=["\'])auto,\s*/', '$1', $filtered_image, 1);
     }
 
     private $lightbox_data = array();
@@ -485,7 +504,7 @@ class ClearPH_Frontend
                 'style' => 'object-fit: ' . esc_attr($settings['object_fit']) . '; object-position: ' . esc_attr($object_position) . '; width: 100%; height: 100%; cursor: ' . ($lightbox_enabled ? 'pointer' : 'default') . ';',
                 'loading' => 'lazy',
                 'alt' => $alt,
-                'sizes' => $this->get_sizes_attribute_for_grid($column_span, $row_span, $masonry_size, $settings['columns'])
+                'sizes' => $this->get_sizes_attribute_for_grid($column_span, $row_span, $masonry_size, $settings['columns'], $image_id)
             );
             $html .= wp_get_attachment_image($image_id, $image_size, false, $image_attrs);
         }
@@ -566,31 +585,65 @@ class ClearPH_Frontend
     /**
      * Generate sizes attribute for responsive images
      * Supports both new grid sizing (column_span/row_span) and legacy masonry sizes
+     *
+     * When $image_id is provided and the cell is taller relative to its width than
+     * the source image, the size is inflated so object-fit: cover doesn't upscale
+     * the chosen srcset candidate vertically (which causes blur).
      */
-    private function get_sizes_attribute_for_grid($column_span, $row_span, $masonry_size, $columns)
+    private function get_sizes_attribute_for_grid($column_span, $row_span, $masonry_size, $columns, $image_id = null)
     {
-        // Calculate size based on column span if using new grid system
-        if ($column_span !== null) {
-            // Micro-column system: each visual column = 2 micro-columns
-            $micro_columns_total = $columns * 2;
-            $size_percentage = ($column_span / $micro_columns_total) * 100;
-        } else {
-            // Legacy system: use masonry size
-            $base_size = 100 / $columns;
+        $micro_columns_total = $columns * 2;
 
+        // If legacy named size (no explicit grid sizing), derive implicit spans
+        // so the aspect-aware math below works for pre-grid galleries too.
+        if ($column_span === null || $row_span === null) {
             switch ($masonry_size) {
+                case 'tall':
+                    $column_span = 2;
+                    $row_span = 4;
+                    break;
                 case 'wide':
-                    $size_percentage = $base_size * 2; // Wide spans 2 columns
+                    $column_span = 4;
+                    $row_span = 2;
                     break;
                 case 'large':
-                    $size_percentage = $base_size * 2; // Large spans 2 columns
+                    $column_span = 4;
+                    $row_span = 4;
                     break;
                 case 'xl':
-                    $size_percentage = 100; // XL spans all columns
+                    $column_span = $micro_columns_total;
+                    $row_span = 6;
                     break;
+                case 'regular':
                 default:
-                    $size_percentage = $base_size; // Regular and tall span 1 column
+                    $column_span = 2;
+                    $row_span = 2;
                     break;
+            }
+        }
+
+        $size_percentage = ($column_span / $micro_columns_total) * 100;
+
+        // Browsers pick srcset candidates based on width only. For object-fit: cover
+        // in a cell that is narrower than the source image's aspect ratio, the image
+        // gets scaled up to fill the cell's height — meaning we need a source wider
+        // than the cell's width alone suggests. Compute the effective width required
+        // at a reference desktop viewport and bump the sizes percentage if needed.
+        if ($image_id) {
+            $meta = wp_get_attachment_metadata($image_id);
+            if ($meta && !empty($meta['width']) && !empty($meta['height'])) {
+                $image_aspect = $meta['width'] / $meta['height'];
+                $ref_viewport_px = 1600; // reference desktop viewport for the calc
+                $cell_width_px = ($size_percentage / 100) * $ref_viewport_px;
+                $cell_height_px = $row_span * 200; // frontend base row height
+                $cell_aspect = $cell_width_px / $cell_height_px;
+
+                if ($cell_aspect < $image_aspect) {
+                    // Cover-fit scales image up to cover cell height — need more width
+                    $effective_width_px = $cell_height_px * $image_aspect;
+                    $effective_vw = ($effective_width_px / $ref_viewport_px) * 100;
+                    $size_percentage = min(100, max($size_percentage, $effective_vw));
+                }
             }
         }
 
