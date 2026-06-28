@@ -48,13 +48,23 @@ Updates are delivered via GitHub Releases and appear in **Plugins > Updates** in
 
 ### Displaying a Gallery
 
-Use the shortcode with gallery ID or title:
+**WPBakery:** add the **Clear pH Masonry Gallery** element (category "Clear pH"), pick a gallery, and optionally override any display setting per placement. Every override defaults to "Inherit from gallery".
+
+**Shortcode** — use a gallery ID or title:
 
 ```
 [clearph_gallery id="123"]
 [clearph_gallery title="Gallery Name"]
 [clearph_gallery id="123" class="custom-class"]
 ```
+
+**Per-instance overrides** (also exposed by the WPBakery element). Omit an attribute to inherit the gallery's saved setting:
+
+```
+[clearph_gallery id="123" columns="2" lightbox_caption_hide="1" object_fit="contain"]
+```
+
+Override attributes: `columns`, `masonry_enabled`, `lightbox_enabled`, `object_fit`, `object_position`, `border_radius`, `column_margin`, `label_show`, `label_show_on_hover`, `label_show_on_lightbox`, `lightbox_caption_hide`, `label_placement`, `label_color`, `label_shadow`, `filter_animation`. Booleans take `1`/`0`; `filter_animation` takes `fade-up`/`fade`/`scale`/`flip`/`blur`/`slide`/`none`.
 
 ### Masonry Sizing
 

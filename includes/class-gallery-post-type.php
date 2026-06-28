@@ -126,9 +126,11 @@ class ClearPH_Gallery_Post_Type
             'filter_enabled' => false,
             'filter_categories' => 'Residences, Amenities, Lifestyle, Local',
             'filter_all_last' => false,
+            'filter_animation' => 'fade-up',
             'label_show' => false,
             'label_show_on_hover' => false,
             'label_show_on_lightbox' => false,
+            'lightbox_caption_hide' => false,
             'label_placement' => 'bottom-center',
             'label_tag' => 'p',
             'label_extra_classes' => '',
@@ -246,6 +248,29 @@ class ClearPH_Gallery_Post_Type
                     <label for="filter_all_last">Place "All" link at end of filter list</label>
                 </td>
             </tr>
+            <tr>
+                <th><label for="filter_animation">Filter Animation</label></th>
+                <td>
+                    <select id="filter_animation" name="filter_animation">
+                        <?php
+                        $filter_animations = array(
+                            'fade-up' => 'Fade Up (staggered)',
+                            'fade'    => 'Fade (staggered)',
+                            'scale'   => 'Scale / Pop In',
+                            'flip'    => '3D Flip',
+                            'blur'    => 'Blur In',
+                            'slide'   => 'Slide In',
+                            'none'    => 'None (instant)',
+                        );
+                        $current_anim = isset($settings['filter_animation']) ? $settings['filter_animation'] : 'fade-up';
+                        foreach ($filter_animations as $value => $label) :
+                        ?>
+                            <option value="<?php echo esc_attr($value); ?>" <?php selected($current_anim, $value); ?>><?php echo esc_html($label); ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                    <p class="description">How items animate in when a category filter is clicked. Staggered effects cascade item-by-item (requires GSAP; falls back to a simple fade otherwise).</p>
+                </td>
+            </tr>
         </table>
 
         <h3 style="margin-top: 20px; padding-top: 15px; border-top: 1px solid #ddd;">Image Labels</h3>
@@ -261,11 +286,15 @@ class ClearPH_Gallery_Post_Type
                         <input type="checkbox" id="label_show_on_hover" name="label_show_on_hover" value="1" <?php checked($settings['label_show_on_hover']); ?>>
                         Show labels on hover only
                     </label>
-                    <label style="display: block;">
+                    <label style="display: block; margin-bottom: 6px;">
                         <input type="checkbox" id="label_show_on_lightbox" name="label_show_on_lightbox" value="1" <?php checked($settings['label_show_on_lightbox']); ?>>
                         Show labels on lightbox image
                     </label>
-                    <p class="description">Check one or both of the first two for in-grid display. If neither is checked, grid labels are hidden. The lightbox option is independent and uses the label text as the lightbox caption.</p>
+                    <label style="display: block;">
+                        <input type="checkbox" id="lightbox_caption_hide" name="lightbox_caption_hide" value="1" <?php checked($settings['lightbox_caption_hide']); ?>>
+                        Hide lightbox caption (kept in the DOM for SEO, hidden with CSS)
+                    </label>
+                    <p class="description">Check one or both of the first two for in-grid display. If neither is checked, grid labels are hidden. The lightbox option is independent and uses the label text as the lightbox caption. <strong>Hide lightbox caption</strong> visually hides the caption/alt text in the lightbox while leaving it in the markup for SEO and accessibility.</p>
                 </td>
             </tr>
             <tr class="clearph-label-options">
@@ -885,6 +914,12 @@ class ClearPH_Gallery_Post_Type
         return in_array($value, $allowed, true) ? $value : 'p';
     }
 
+    private function sanitize_filter_animation($value)
+    {
+        $allowed = array('fade-up', 'fade', 'scale', 'flip', 'blur', 'slide', 'none');
+        return in_array($value, $allowed, true) ? $value : 'fade-up';
+    }
+
     public function save_gallery_meta($post_id)
     {
         if (!isset($_POST['clearph_gallery_nonce']) || !wp_verify_nonce($_POST['clearph_gallery_nonce'], 'clearph_gallery_meta')) {
@@ -912,9 +947,11 @@ class ClearPH_Gallery_Post_Type
             'filter_enabled' => isset($_POST['filter_enabled']) ? 1 : 0,
             'filter_categories' => sanitize_text_field($_POST['filter_categories']),
             'filter_all_last' => isset($_POST['filter_all_last']) ? 1 : 0,
+            'filter_animation' => $this->sanitize_filter_animation(isset($_POST['filter_animation']) ? $_POST['filter_animation'] : ''),
             'label_show' => isset($_POST['label_show']) ? 1 : 0,
             'label_show_on_hover' => isset($_POST['label_show_on_hover']) ? 1 : 0,
             'label_show_on_lightbox' => isset($_POST['label_show_on_lightbox']) ? 1 : 0,
+            'lightbox_caption_hide' => isset($_POST['lightbox_caption_hide']) ? 1 : 0,
             'label_placement' => $this->sanitize_label_placement(isset($_POST['label_placement']) ? $_POST['label_placement'] : ''),
             'label_tag' => $this->sanitize_label_tag(isset($_POST['label_tag']) ? $_POST['label_tag'] : ''),
             'label_extra_classes' => sanitize_text_field(isset($_POST['label_extra_classes']) ? $_POST['label_extra_classes'] : ''),

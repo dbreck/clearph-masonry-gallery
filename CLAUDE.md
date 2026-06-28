@@ -247,6 +247,15 @@ Display galleries using either ID or title:
 
 Returns error message if gallery not found.
 
+## WPBakery Element + Per-Instance Overrides (v1.10.0)
+
+`includes/class-wpbakery.php` maps `[clearph_gallery]` as the WPBakery element **"Clear pH Masonry Gallery"** (category "Clear pH"), hooked on `vc_before_init`. Loaded/instantiated in the bootstrap (`ClearPH_Masonry_WPBakery`).
+
+- **Gallery picker** = dropdown of published `clearph_gallery` posts (`get_gallery_options()`), value = post ID → shortcode `id` attr.
+- **Override params** (grouped into General/Layout/Labels/Lightbox tabs) map 1:1 to gallery settings. Booleans use a tri-state dropdown (`tristate()`): `''` = Inherit, `'1'` = Yes, `'0'` = No. Dropdowns/text overrides default to `''` (inherit).
+- The shortcode handler (`render_gallery_shortcode`) accepts all override attrs (default `''`) and `apply_setting_overrides($settings, $atts)` merges non-empty values over the gallery's saved `_clearph_gallery_settings` BEFORE render. Empty = inherit. So a bare `[clearph_gallery id="X"]` (or an unconfigured element) behaves exactly as before.
+- **Gotcha:** WPBakery omits params equal to the empty `std`, so "Inherit" simply doesn't emit the attribute — which is exactly what the inherit logic expects. Don't give tri-state params a non-empty `std`.
+
 ## Gallery Builder State Management
 
 The admin interface (`admin/js/gallery-builder.js`) maintains complex client-side state:
@@ -309,6 +318,9 @@ Stored in `_clearph_image_labels` gallery post meta. Hidden JSON field `#image_l
 - `render_label()` helper in `class-frontend.php` outputs positioned label element
 - Visibility: `data-label-show="1"` / `data-label-hover="1"` on `.clearph-gallery` container
 - CSS handles show-always, hover-only, and both-on states
+
+### Hide Lightbox Caption (v1.10.0)
+Setting `lightbox_caption_hide` (Image Labels → Label Visibility). The FancyBox lightbox always passed a `caption` (label text when `label_show_on_lightbox` is on, else the attachment **alt text**), so the alt text showed with no off-switch. When enabled: container gets `data-hide-lightbox-caption="true"`, the click handler reads it (`hideCaption`) and appends `clearph-fancybox-caption-hidden` to the FancyBox `baseClass` (combined with `clearph-fancybox-captioned` if both apply). CSS keeps the caption **in the DOM** (SEO/accessibility) but hides it visually (`visibility:hidden; opacity:0; pointer-events:none`) — the hidden rule is placed AFTER the captioned reveal rule so it wins. Independent of in-grid labels.
 - Placement: 9 positions via `position: absolute` with 40px top/bottom, 20px left/right offsets
 - **Specificity fix**: all position rules scoped under `.clearph-gallery` with explicit reset of opposing properties (`top: auto`, `left: auto`, etc.) so extra CSS classes from themes don't override
 
@@ -373,6 +385,15 @@ Original spans live in jQuery data only — no DOM re-read needed. GSAP entrance
 **Migration strategy:** No auto-migration. Readers fall through: gallery-scoped → legacy attachment `clearph_grid_sizing` → legacy `clearph_masonry_sizing`. Once a gallery is edited + saved, new sizing writes to the new location. Old attachment meta stays in place (not cleaned up — read as fallback until superseded).
 
 **Gotcha for future changes:** ANY new sizing code MUST use the gallery-scoped path. Never `update_post_meta($image_id, 'clearph_grid_sizing', ...)` — that's the exact bug this fix removed.
+
+## Filter Animations (v2.0.0)
+
+Setting `filter_animation` (Filter Settings dropdown) controls how items animate in when a category filter is clicked. Replaces the old single `gsap.fromTo` (opacity/y/scale on all items at once). Effects: `fade-up` (default), `fade`, `scale`, `flip`, `blur`, `slide`, `none`.
+
+- **Frontend:** emitted as `data-filter-animation` on the `.clearph-gallery` container; read in the filter click handler (`public/js/masonry-gallery.js`). Effect presets live in the module-scope `CLEARPH_FILTER_FX` map (GSAP from/to vars + per-effect stagger).
+- **Flow:** classify items into `entering`/`leaving` → quick opacity fade-out of leaving items → `applyLayout()` (display + uniform/restored grid spans, the functional reflow) → staggered `gsap.fromTo` entrance on entering items. Exit is opacity-only so no transform lingers between filters; entrances `clearProps:"transform,filter"` but KEEP opacity inline at 1 (there's no base CSS `opacity:0` on items, but the load-reveal animation sets inline `opacity:0`, so clearing opacity would let leftover state win — keep it explicit).
+- **GOTCHA — never gate the functional reflow on a GSAP `onComplete` without a visibility guard.** GSAP runs on `requestAnimationFrame`, which browsers FREEZE in background tabs, so `onComplete` never fires there. `?filter=` links auto-click a filter on load; opened in a background tab that would leave the gallery stuck mid-filter. The handler sets `animate = hasGsap && fx && !prefersReducedMotion && !document.hidden` → hidden tabs filter instantly (synchronous `applyLayout` + show), visible tabs animate. Also respects `prefers-reduced-motion`.
+- Overridable per-instance via the WPBakery element / shortcode attr `filter_animation`.
 
 ## Salient Theme Integration
 

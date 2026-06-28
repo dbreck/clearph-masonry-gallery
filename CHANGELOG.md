@@ -5,6 +5,14 @@ All notable changes to this project are documented in this file.
 The format loosely follows [Keep a Changelog](https://keepachangelog.com/) and this
 project adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.0.0] — 2026-06-28
+
+### Features
+- **WPBakery element** "Clear pH Masonry Gallery" (category "Clear pH"). Pick a saved gallery from a dropdown and optionally override its display settings per placement — Columns, Masonry, Object Fit/Position, Border Radius, Column Gap, Labels (show/hover/placement/color/shadow), Lightbox (enable, labels-on-lightbox, hide caption), and Filter Animation. Every override defaults to "Inherit from gallery", so an unconfigured element renders identically to a plain `[clearph_gallery id="X"]`.
+- **Per-instance shortcode overrides**: `[clearph_gallery]` now accepts the same settings as attributes (e.g. `columns="2" lightbox_caption_hide="1" filter_animation="scale"`). Empty/omitted = inherit the gallery's saved setting.
+- **Filter animations**: new "Filter Animation" setting (Filter Settings) replacing the old all-at-once fade with GSAP-powered, staggered entrances — **Fade Up** (default), **Fade**, **Scale / Pop In**, **3D Flip**, **Blur In**, **Slide In**, or **None**. Departing items get a quick fade-out before the layout reflows, then the new set cascades in. Respects `prefers-reduced-motion`, falls back to a CSS fade without GSAP, and skips animation in hidden tabs (so `?filter=` links opened in a background tab still filter correctly instead of stalling on a frozen GSAP timeline).
+- **New "Hide lightbox caption" setting** (Image Labels → Label Visibility). The lightbox showed the label or attachment alt text as a caption with no way to turn it off. When enabled, the caption stays in the FancyBox markup (for SEO / accessibility) but is hidden visually via CSS (`visibility:hidden; opacity:0`) using a new `clearph-fancybox-caption-hidden` baseClass. Does not affect in-grid labels.
+
 ## [1.9.2] — 2026-04-21
 
 ### Fixes

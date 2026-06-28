@@ -264,6 +264,46 @@ jQuery(document).ready(function ($) {
     }
   }, 100)
 
+  // Filter entrance animations (GSAP). Each maps to fromTo vars + stagger.
+  // The exit is always a quick opacity fade so no transform lingers between
+  // filters (every entrance also animates opacity, so it's safely overridden).
+  var CLEARPH_FILTER_FX = {
+    none: null,
+    fade: {
+      from: { opacity: 0 },
+      to: { opacity: 1 },
+      dur: 0.45, ease: "power2.out", stagger: 0.04,
+    },
+    "fade-up": {
+      from: { opacity: 0, y: 28 },
+      to: { opacity: 1, y: 0 },
+      dur: 0.55, ease: "power3.out", stagger: 0.06,
+    },
+    scale: {
+      from: { opacity: 0, scale: 0.8 },
+      to: { opacity: 1, scale: 1 },
+      dur: 0.5, ease: "back.out(1.6)", stagger: 0.05,
+    },
+    flip: {
+      from: { opacity: 0, rotationX: -85, transformPerspective: 600, transformOrigin: "50% 50%" },
+      to: { opacity: 1, rotationX: 0 },
+      dur: 0.6, ease: "power3.out", stagger: 0.06,
+    },
+    blur: {
+      from: { opacity: 0, scale: 1.04, filter: "blur(12px)" },
+      to: { opacity: 1, scale: 1, filter: "blur(0px)" },
+      dur: 0.65, ease: "power2.out", stagger: 0.05,
+    },
+    slide: {
+      from: { opacity: 0, x: -36 },
+      to: { opacity: 1, x: 0 },
+      dur: 0.5, ease: "power3.out", stagger: { each: 0.05, from: "start" },
+    },
+  }
+
+  var CLEARPH_REDUCED_MOTION =
+    window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches
+
   // Category filtering
   $(document).on("click", ".clearph-gallery-filters .filter-btn", function (e) {
     e.preventDefault()
@@ -291,51 +331,90 @@ jQuery(document).ready(function ($) {
       $gallery.data("original-spans-saved", true)
     }
 
-    // Filter gallery items
-    $gallery.find(".gallery-item").each(function () {
-      const $item = $(this)
-      const category = $item.data("category") || ""
-      const show = isShowAll || category === filter
+    // Resolve the entrance animation for this gallery (data attr, default fade-up).
+    var animType = $gallery.attr("data-filter-animation") || "fade-up"
+    var fx = CLEARPH_FILTER_FX.hasOwnProperty(animType)
+      ? CLEARPH_FILTER_FX[animType]
+      : CLEARPH_FILTER_FX["fade-up"]
+    var hasGsap = typeof gsap !== "undefined"
+    // Only animate when the tab is visible: GSAP runs on requestAnimationFrame,
+    // which browsers freeze in background tabs — so a tween's onComplete (which
+    // we use to commit the layout change) would never fire, leaving the gallery
+    // stuck mid-filter. This matters for ?filter= links opened in a new tab,
+    // which auto-click a filter on load. Hidden = filter instantly + correctly.
+    var animate = hasGsap && fx && !CLEARPH_REDUCED_MOTION && !document.hidden
 
-      if (show) {
-        $item.css("display", "")
-      } else {
-        $item.css("display", "none")
+    // Classify items into entering (will be shown) and leaving (visible now,
+    // about to be hidden) BEFORE touching the DOM.
+    var $items = $gallery.find(".gallery-item")
+    var entering = []
+    var leaving = []
+    $items.each(function () {
+      var category = $(this).data("category") || ""
+      var willShow = isShowAll || category === filter
+      if (willShow) {
+        entering.push(this)
+      } else if (this.style.display !== "none") {
+        leaving.push(this)
       }
     })
 
-    if (isShowAll) {
-      // Restore original grid spans
-      $gallery.find(".gallery-item").each(function () {
-        const $item = $(this)
-        $item[0].style.gridColumn = $item.data("original-grid-column") || ""
-        $item[0].style.gridRow = $item.data("original-grid-row") || ""
-      })
-    } else {
-      // Set visible items to uniform sizing (1 visual col = 2 micro-cols, 2 rows)
-      $gallery.find(".gallery-item").each(function () {
-        const $item = $(this)
-        if ($item.css("display") !== "none") {
-          $item[0].style.gridColumn = "span 2"
-          $item[0].style.gridRow = "span 2"
+    // Apply visibility + the uniform/restored grid spans (instant reflow).
+    function applyLayout() {
+      $items.each(function () {
+        var $item = $(this)
+        var willShow = isShowAll || ($item.data("category") || "") === filter
+        $item.css("display", willShow ? "" : "none")
+        if (willShow) {
+          if (isShowAll) {
+            this.style.gridColumn = $item.data("original-grid-column") || ""
+            this.style.gridRow = $item.data("original-grid-row") || ""
+          } else {
+            this.style.gridColumn = "span 2"
+            this.style.gridRow = "span 2"
+          }
         }
       })
     }
 
-    // Animate visible items
-    $gallery.find(".gallery-item").each(function () {
-      const $item = $(this)
-      if ($item.css("display") === "none") return
-
-      if (typeof gsap !== "undefined") {
-        gsap.fromTo(
-          $item[0],
-          { opacity: 0, y: 20, scale: 0.95 },
-          { opacity: 1, y: 0, scale: 1, duration: 0.5, ease: "power2.out" }
-        )
-      } else {
-        $item.addClass("animate-in")
+    // Animate the now-visible items in with the chosen effect + stagger.
+    function playEnter() {
+      if (!animate) {
+        if (hasGsap) gsap.set(entering, { clearProps: "transform,filter,opacity" })
+        $(entering).addClass("animate-in")
+        return
       }
-    })
+      gsap.killTweensOf(entering)
+      gsap.fromTo(
+        entering,
+        fx.from,
+        Object.assign({}, fx.to, {
+          duration: fx.dur,
+          ease: fx.ease,
+          stagger: fx.stagger,
+          clearProps: "transform,filter,opacity",
+        })
+      )
+    }
+
+    if (animate && leaving.length) {
+      // Quick fade-out of the departing items, THEN reflow + staggered enter so
+      // the layout doesn't snap while items are still on screen.
+      gsap.killTweensOf(leaving)
+      gsap.to(leaving, {
+        opacity: 0,
+        duration: 0.2,
+        ease: "power1.in",
+        stagger: 0.015,
+        onComplete: function () {
+          gsap.set(leaving, { clearProps: "opacity" })
+          applyLayout()
+          playEnter()
+        },
+      })
+    } else {
+      applyLayout()
+      playEnter()
+    }
   })
 })

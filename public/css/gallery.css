@@ -482,6 +482,16 @@
     visibility: visible !important;
 }
 
+/* "Hide lightbox caption" setting: keep the caption text in the DOM (for SEO /
+   accessibility) but hide it visually. Placed after the captioned rule so it
+   wins if a gallery somehow has both states. */
+.clearph-fancybox-caption-hidden .fancybox-caption,
+.clearph-fancybox-caption-hidden .fancybox-caption--separate {
+    opacity: 0 !important;
+    visibility: hidden !important;
+    pointer-events: none !important;
+}
+
 /* Print styles */
 @media print {
     .clearph-gallery {

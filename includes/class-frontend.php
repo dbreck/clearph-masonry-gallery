@@ -41,7 +41,24 @@ class ClearPH_Frontend
             'id' => 0,
             'title' => '',
             'class' => '',
-            'lightbox_group' => ''
+            'lightbox_group' => '',
+            // Per-instance setting overrides (WPBakery element). Empty string = inherit
+            // the gallery's own saved setting.
+            'masonry_enabled'        => '',
+            'columns'                => '',
+            'lightbox_enabled'       => '',
+            'object_fit'             => '',
+            'object_position'        => '',
+            'border_radius'          => '',
+            'column_margin'          => '',
+            'label_show'             => '',
+            'label_show_on_hover'    => '',
+            'label_show_on_lightbox' => '',
+            'lightbox_caption_hide'  => '',
+            'label_placement'        => '',
+            'label_color'            => '',
+            'label_shadow'           => '',
+            'filter_animation'       => '',
         ), $atts);
 
         $gallery_id = 0;
@@ -61,6 +78,12 @@ class ClearPH_Frontend
         }
 
         $settings = get_post_meta($gallery_id, '_clearph_gallery_settings', true);
+        if (!is_array($settings)) {
+            $settings = array();
+        }
+        // Apply any per-instance overrides coming from the WPBakery element / shortcode.
+        $settings = $this->apply_setting_overrides($settings, $atts);
+
         $images = get_post_meta($gallery_id, '_clearph_gallery_images', true);
 
         if (empty($images)) {
@@ -72,6 +95,44 @@ class ClearPH_Frontend
         wp_enqueue_style('clearph-masonry-frontend');
 
         return $this->render_gallery($gallery_id, $settings, $images, $atts['class'], $atts['lightbox_group']);
+    }
+
+    /**
+     * Merge per-instance setting overrides (from the WPBakery element / shortcode
+     * attributes) over the gallery's own saved settings. An empty-string override
+     * means "inherit" and is skipped. Booleans use a tri-state: '1' = on,
+     * '0' = off, '' = inherit.
+     */
+    private function apply_setting_overrides($settings, $atts)
+    {
+        $bool_keys = array(
+            'masonry_enabled', 'lightbox_enabled', 'label_show', 'label_show_on_hover',
+            'label_show_on_lightbox', 'lightbox_caption_hide', 'label_shadow',
+        );
+        $raw_keys = array(
+            'object_fit', 'object_position', 'border_radius', 'column_margin',
+            'label_placement', 'label_color', 'filter_animation',
+        );
+
+        foreach ($bool_keys as $key) {
+            if (isset($atts[$key]) && $atts[$key] !== '') {
+                $val = strtolower((string) $atts[$key]);
+                $settings[$key] = in_array($val, array('1', 'yes', 'true', 'on'), true) ? 1 : 0;
+            }
+        }
+        foreach ($raw_keys as $key) {
+            if (isset($atts[$key]) && $atts[$key] !== '') {
+                $settings[$key] = $atts[$key];
+            }
+        }
+        if (isset($atts['columns']) && $atts['columns'] !== '') {
+            $cols = absint($atts['columns']);
+            if ($cols >= 2 && $cols <= 6) {
+                $settings['columns'] = $cols;
+            }
+        }
+
+        return $settings;
     }
 
     private function render_gallery($gallery_id, $settings, $images, $extra_class = '', $lightbox_group_override = '')
@@ -88,11 +149,13 @@ class ClearPH_Frontend
             'label_show' => false,
             'label_show_on_hover' => false,
             'label_show_on_lightbox' => false,
+            'lightbox_caption_hide' => false,
             'label_placement' => 'bottom-center',
             'label_tag' => 'p',
             'label_extra_classes' => '',
             'label_color' => '#ffffff',
-            'label_shadow' => false
+            'label_shadow' => false,
+            'filter_animation' => 'fade-up'
         );
         $settings = wp_parse_args($settings, $defaults);
 
@@ -210,9 +273,11 @@ class ClearPH_Frontend
         $html .= ' data-masonry="' . ($settings['masonry_enabled'] ? 'true' : 'false') . '"';
         $html .= ' data-border-radius="' . esc_attr($settings['border_radius']) . '"';
         $html .= ' data-column-margin="' . esc_attr($settings['column_margin']) . '"';
+        $html .= ' data-filter-animation="' . esc_attr($settings['filter_animation']) . '"';
         $html .= ' data-gallery-group="' . esc_attr($gallery_group) . '"';
         $html .= ' data-gallery-id="' . esc_attr($gallery_id) . '"';
         $html .= ' data-show-lightbox-captions="' . ($use_labels_for_lightbox ? 'true' : 'false') . '"';
+        $html .= ' data-hide-lightbox-caption="' . (!empty($settings['lightbox_caption_hide']) ? 'true' : 'false') . '"';
         if (!empty($settings['label_show'])) {
             $html .= ' data-label-show="1"';
         }
@@ -682,6 +747,7 @@ class ClearPH_Frontend
                     const galleryGroup = $galleryEl.data('gallery-group');
                     const sourceGalleryId = $galleryEl.data('gallery-id');
                     const showCaptions = $galleryEl.data('show-lightbox-captions') === true || $galleryEl.data('show-lightbox-captions') === 'true';
+                    const hideCaption = $galleryEl.data('hide-lightbox-caption') === true || $galleryEl.data('hide-lightbox-caption') === 'true';
                     const imageId = $(this).data('image-id');
                     const lightboxData = window.clearphLightboxData[galleryGroup];
 
@@ -730,7 +796,7 @@ class ClearPH_Frontend
                             caption: item.caption || ''
                         };
                     }), {
-                        baseClass: showCaptions ? 'clearph-fancybox-captioned' : '',
+                        baseClass: [showCaptions ? 'clearph-fancybox-captioned' : '', hideCaption ? 'clearph-fancybox-caption-hidden' : ''].filter(Boolean).join(' '),
                         buttons: buttons,
                         loop: true,
                         protect: <?php echo is_user_logged_in() ? 'false' : 'true'; ?>,
