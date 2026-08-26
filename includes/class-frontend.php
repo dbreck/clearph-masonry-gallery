@@ -47,6 +47,7 @@ class ClearPH_Frontend
             'masonry_enabled'        => '',
             'columns'                => '',
             'lightbox_enabled'       => '',
+            'lightbox_download_hide' => '',
             'object_fit'             => '',
             'object_position'        => '',
             'border_radius'          => '',
@@ -107,7 +108,7 @@ class ClearPH_Frontend
     {
         $bool_keys = array(
             'masonry_enabled', 'lightbox_enabled', 'label_show', 'label_show_on_hover',
-            'label_show_on_lightbox', 'lightbox_caption_hide', 'label_shadow',
+            'label_show_on_lightbox', 'lightbox_caption_hide', 'lightbox_download_hide', 'label_shadow',
         );
         $raw_keys = array(
             'object_fit', 'object_position', 'border_radius', 'column_margin',
@@ -141,6 +142,7 @@ class ClearPH_Frontend
             'masonry_enabled' => true,
             'columns' => 4,
             'lightbox_enabled' => true,
+            'lightbox_download_hide' => false,
             'image_size' => 'large',
             'object_fit' => 'cover',
             'object_position' => 'center center',
@@ -278,6 +280,7 @@ class ClearPH_Frontend
         $html .= ' data-gallery-id="' . esc_attr($gallery_id) . '"';
         $html .= ' data-show-lightbox-captions="' . ($use_labels_for_lightbox ? 'true' : 'false') . '"';
         $html .= ' data-hide-lightbox-caption="' . (!empty($settings['lightbox_caption_hide']) ? 'true' : 'false') . '"';
+        $html .= ' data-hide-lightbox-download="' . (!empty($settings['lightbox_download_hide']) ? 'true' : 'false') . '"';
         if (!empty($settings['label_show'])) {
             $html .= ' data-label-show="1"';
         }
@@ -748,6 +751,7 @@ class ClearPH_Frontend
                     const sourceGalleryId = $galleryEl.data('gallery-id');
                     const showCaptions = $galleryEl.data('show-lightbox-captions') === true || $galleryEl.data('show-lightbox-captions') === 'true';
                     const hideCaption = $galleryEl.data('hide-lightbox-caption') === true || $galleryEl.data('hide-lightbox-caption') === 'true';
+                    const hideDownload = $galleryEl.data('hide-lightbox-download') === true || $galleryEl.data('hide-lightbox-download') === 'true';
                     const imageId = $(this).data('image-id');
                     const lightboxData = window.clearphLightboxData[galleryGroup];
 
@@ -766,8 +770,8 @@ class ClearPH_Frontend
                         }
                     }
 
-                    // Build FancyBox button set based on auth
-                    var buttons = clearphIsLoggedIn ? ["zoom", "slideShow", "fullScreen", "download", "close"] : ["zoom", "slideShow", "fullScreen", "close"]; // no download when logged out
+                    // Build FancyBox button set based on auth and gallery setting
+                    var buttons = (clearphIsLoggedIn && !hideDownload) ? ["zoom", "slideShow", "fullScreen", "download", "close"] : ["zoom", "slideShow", "fullScreen", "close"]; // no download when logged out or hidden by setting
 
                     // Open FancyBox
                     $.fancybox.open(lightboxData.map(function(item) {

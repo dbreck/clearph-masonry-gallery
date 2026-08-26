@@ -118,6 +118,7 @@ class ClearPH_Gallery_Post_Type
             'masonry_enabled' => true,
             'columns' => 4,
             'lightbox_enabled' => true,
+            'lightbox_download_hide' => false,
             'image_size' => 'large',
             'object_fit' => 'cover',
             'object_position' => 'center center',
@@ -169,6 +170,13 @@ class ClearPH_Gallery_Post_Type
                 <td>
                     <input type="checkbox" id="lightbox_enabled" name="lightbox_enabled" value="1" <?php checked($settings['lightbox_enabled']); ?>>
                     <p class="description">Uses FancyBox 3 from Salient theme settings</p>
+                </td>
+            </tr>
+            <tr>
+                <th><label for="lightbox_download_hide">Hide Download Button</label></th>
+                <td>
+                    <input type="checkbox" id="lightbox_download_hide" name="lightbox_download_hide" value="1" <?php checked($settings['lightbox_download_hide']); ?>>
+                    <p class="description">Remove the download button from the lightbox toolbar. (Logged-out visitors never see it; this hides it for logged-in users too.)</p>
                 </td>
             </tr>
             <tr>
@@ -939,6 +947,7 @@ class ClearPH_Gallery_Post_Type
             'masonry_enabled' => isset($_POST['masonry_enabled']) ? 1 : 0,
             'columns' => absint($_POST['columns']),
             'lightbox_enabled' => isset($_POST['lightbox_enabled']) ? 1 : 0,
+            'lightbox_download_hide' => isset($_POST['lightbox_download_hide']) ? 1 : 0,
             'image_size' => sanitize_text_field($_POST['image_size']),
             'object_fit' => sanitize_text_field($_POST['object_fit']),
             'object_position' => $this->sanitize_object_position(isset($_POST['object_position']) ? $_POST['object_position'] : ''),

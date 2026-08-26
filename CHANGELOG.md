@@ -5,6 +5,11 @@ All notable changes to this project are documented in this file.
 The format loosely follows [Keep a Changelog](https://keepachangelog.com/) and this
 project adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.1.0] — 2026-08-26
+
+### Features
+- **New "Hide Download Button" setting** (Gallery Settings, under Enable Lightbox). Removes the download button from the FancyBox lightbox toolbar. The button was already hidden for logged-out visitors; this setting hides it for logged-in users as well. Available as a per-instance override via the shortcode attribute `lightbox_download_hide="1"` and the WPBakery element's Lightbox group ("Hide Download Button", tri-state Inherit/Yes/No).
+
 ## [2.0.0] — 2026-06-28
 
 ### Features

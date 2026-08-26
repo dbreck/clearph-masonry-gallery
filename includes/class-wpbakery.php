@@ -254,6 +254,14 @@ class ClearPH_Masonry_WPBakery
                     'description' => __('Keeps the caption in the markup for SEO but hides it visually.', 'clearph-masonry-gallery'),
                     'group'       => __('Lightbox', 'clearph-masonry-gallery'),
                 ),
+                array(
+                    'type'        => 'dropdown',
+                    'heading'     => __('Hide Download Button', 'clearph-masonry-gallery'),
+                    'param_name'  => 'lightbox_download_hide',
+                    'value'       => $this->tristate(),
+                    'description' => __('Removes the download button from the lightbox toolbar (only ever shown to logged-in users).', 'clearph-masonry-gallery'),
+                    'group'       => __('Lightbox', 'clearph-masonry-gallery'),
+                ),
             ),
         ));
     }
