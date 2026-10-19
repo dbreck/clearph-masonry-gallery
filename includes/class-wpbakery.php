@@ -182,6 +182,26 @@ class ClearPH_Masonry_WPBakery
                     'description' => __('How items animate in when a category filter is clicked.', 'clearph-masonry-gallery'),
                     'group'       => __('Filter', 'clearph-masonry-gallery'),
                 ),
+                array(
+                    'type'        => 'dropdown',
+                    'heading'     => __('Hide "All" Link', 'clearph-masonry-gallery'),
+                    'param_name'  => 'filter_hide_all',
+                    'value'       => $this->tristate(),
+                    'description' => __('With no "All" link the gallery opens on its first category.', 'clearph-masonry-gallery'),
+                    'group'       => __('Filter', 'clearph-masonry-gallery'),
+                ),
+                array(
+                    'type'       => 'dropdown',
+                    'heading'    => __('Filter Alignment', 'clearph-masonry-gallery'),
+                    'param_name' => 'filter_align',
+                    'value'      => array(
+                        $inherit                                => '',
+                        __('Left', 'clearph-masonry-gallery')   => 'left',
+                        __('Center', 'clearph-masonry-gallery') => 'center',
+                        __('Right', 'clearph-masonry-gallery')  => 'right',
+                    ),
+                    'group'      => __('Filter', 'clearph-masonry-gallery'),
+                ),
 
                 // ---- Labels ----
                 array(

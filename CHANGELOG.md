@@ -5,6 +5,15 @@ All notable changes to this project are documented in this file.
 The format loosely follows [Keep a Changelog](https://keepachangelog.com/) and this
 project adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.3.0] — 2026-10-19
+
+### Features
+- **New "Hide 'All' Link" filter setting** (Filter Settings, under All Link Position). Removes the "All" button; the gallery then opens on its first category, since there'd otherwise be no way back to the unfiltered view. A `?filter=` / `#filter-` link still opens its own category. Also available as the shortcode attribute `filter_hide_all="1"` and a tri-state override on the WPBakery element's Filter tab.
+- **New "Filter Alignment" setting**: Left (default, previous behavior), Center or Right. Also available as the shortcode attribute `filter_align` and on the WPBakery element's Filter tab.
+
+### Notes
+- While a category filter is active, items still switch to the uniform one-column grid, so with "All" hidden the masonry layout isn't shown.
+
 ## [2.2.0] — 2026-10-19
 
 ### Features

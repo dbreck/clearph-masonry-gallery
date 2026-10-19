@@ -278,11 +278,19 @@ jQuery(document).ready(function ($) {
       preFilter = decodeURIComponent(preFilter)
       $(".clearph-gallery-filters .filter-btn").each(function () {
         if ($(this).data("filter") === preFilter) {
+          $(this).closest(".clearph-gallery-filters").data("prefiltered", true)
           $(this).trigger("click")
           return false
         }
       })
     }
+
+    // Galleries with the "All" link hidden open on their first category
+    $('.clearph-gallery-filters[data-hide-all="1"]').each(function () {
+      if (!$(this).data("prefiltered")) {
+        $(this).find(".filter-btn").first().trigger("click")
+      }
+    })
   }, 100)
 
   // Filter entrance animations (GSAP). Each maps to fromTo vars + stagger.

@@ -10,6 +10,14 @@
     background: transparent;
 }
 
+.clearph-gallery-filters--center {
+    justify-content: center;
+}
+
+.clearph-gallery-filters--right {
+    justify-content: flex-end;
+}
+
 .clearph-gallery-filters .filter-btn {
     padding: 10px 0;
     border: none;

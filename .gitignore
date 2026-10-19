@@ -19,3 +19,6 @@ yarn-error.log*
 # Temporary files
 *.tmp
 *.temp
+
+# Build output (installable zips)
+dist/

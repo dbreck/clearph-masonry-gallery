@@ -129,6 +129,8 @@ class ClearPH_Gallery_Post_Type
             'filter_enabled' => false,
             'filter_categories' => 'Residences, Amenities, Lifestyle, Local',
             'filter_all_last' => false,
+            'filter_hide_all' => false,
+            'filter_align' => 'left',
             'filter_animation' => 'fade-up',
             'label_show' => false,
             'label_show_on_hover' => false,
@@ -284,6 +286,24 @@ class ClearPH_Gallery_Post_Type
                 <td>
                     <input type="checkbox" id="filter_all_last" name="filter_all_last" value="1" <?php checked($settings['filter_all_last']); ?>>
                     <label for="filter_all_last">Place "All" link at end of filter list</label>
+                </td>
+            </tr>
+            <tr>
+                <th><label for="filter_hide_all">Hide "All" Link</label></th>
+                <td>
+                    <input type="checkbox" id="filter_hide_all" name="filter_hide_all" value="1" <?php checked($settings['filter_hide_all']); ?>>
+                    <label for="filter_hide_all">Don't show an "All" filter</label>
+                    <p class="description">The gallery then opens on the first category (a <code>?filter=</code> link still picks its own).</p>
+                </td>
+            </tr>
+            <tr>
+                <th><label for="filter_align">Filter Alignment</label></th>
+                <td>
+                    <select id="filter_align" name="filter_align">
+                        <?php foreach (array('left' => 'Left', 'center' => 'Center', 'right' => 'Right') as $value => $label) : ?>
+                            <option value="<?php echo esc_attr($value); ?>" <?php selected($settings['filter_align'], $value); ?>><?php echo esc_html($label); ?></option>
+                        <?php endforeach; ?>
+                    </select>
                 </td>
             </tr>
             <tr>
@@ -1000,6 +1020,8 @@ class ClearPH_Gallery_Post_Type
             'filter_enabled' => isset($_POST['filter_enabled']) ? 1 : 0,
             'filter_categories' => sanitize_text_field($_POST['filter_categories']),
             'filter_all_last' => isset($_POST['filter_all_last']) ? 1 : 0,
+            'filter_hide_all' => isset($_POST['filter_hide_all']) ? 1 : 0,
+            'filter_align' => (isset($_POST['filter_align']) && in_array($_POST['filter_align'], array('left', 'center', 'right'), true)) ? $_POST['filter_align'] : 'left',
             'filter_animation' => $this->sanitize_filter_animation(isset($_POST['filter_animation']) ? $_POST['filter_animation'] : ''),
             'label_show' => isset($_POST['label_show']) ? 1 : 0,
             'label_show_on_hover' => isset($_POST['label_show_on_hover']) ? 1 : 0,

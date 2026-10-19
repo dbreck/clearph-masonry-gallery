@@ -61,6 +61,8 @@ class ClearPH_Frontend
             'label_color'            => '',
             'label_shadow'           => '',
             'filter_animation'       => '',
+            'filter_hide_all'        => '',
+            'filter_align'           => '',
         ), $atts);
 
         $gallery_id = 0;
@@ -110,10 +112,12 @@ class ClearPH_Frontend
         $bool_keys = array(
             'masonry_enabled', 'lightbox_enabled', 'label_show', 'label_show_on_hover',
             'label_show_on_lightbox', 'lightbox_caption_hide', 'lightbox_download_hide', 'label_shadow',
+            'filter_hide_all',
         );
         $raw_keys = array(
             'object_fit', 'object_position', 'border_radius', 'column_margin',
             'label_placement', 'label_color', 'filter_animation', 'lightbox_transition',
+            'filter_align',
         );
 
         foreach ($bool_keys as $key) {
@@ -386,17 +390,24 @@ class ClearPH_Frontend
             return '';
         }
 
-        $all_btn = '<button class="filter-btn active" data-filter="*">All</button>';
+        $hide_all = !empty($settings['filter_hide_all']);
+        $all_btn = $hide_all ? '' : '<button class="filter-btn active" data-filter="*">All</button>';
         $all_last = !empty($settings['filter_all_last']);
 
-        $html = '<div class="clearph-gallery-filters" data-gallery-id="' . esc_attr($gallery_id) . '">';
+        // With no "All" link the gallery opens on the first category:
+        // masonry-gallery.js clicks it on load (data-hide-all)
+        $align = isset($settings['filter_align']) && in_array($settings['filter_align'], array('center', 'right'), true) ? $settings['filter_align'] : '';
+        $class = 'clearph-gallery-filters' . ($align ? ' clearph-gallery-filters--' . $align : '');
+
+        $html = '<div class="' . esc_attr($class) . '" data-gallery-id="' . esc_attr($gallery_id) . '"' . ($hide_all ? ' data-hide-all="1"' : '') . '>';
 
         if (!$all_last) {
             $html .= $all_btn;
         }
 
-        foreach ($categories as $category) {
-            $html .= '<button class="filter-btn" data-filter="' . esc_attr($category) . '">' . esc_html($category) . '</button>';
+        foreach (array_values($categories) as $i => $category) {
+            $active = ($hide_all && $i === 0) ? ' active' : '';
+            $html .= '<button class="filter-btn' . $active . '" data-filter="' . esc_attr($category) . '">' . esc_html($category) . '</button>';
         }
 
         if ($all_last) {

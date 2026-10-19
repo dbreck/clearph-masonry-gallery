@@ -377,6 +377,10 @@ Gallery setting `filter_all_last` (checkbox). When checked, the "All" filter but
 
 **Files:** Default + admin UI + save in `class-gallery-post-type.php`, conditional render in `class-frontend.php` `render_category_filters()`.
 
+**Hide "All" (`filter_hide_all`, v2.3.0):** checkbox under All Link Position, plus shortcode attr / WPBakery Filter-tab tri-state. `render_category_filters()` omits the All button, marks the first category `active` and adds `data-hide-all="1"` to `.clearph-gallery-filters`; `masonry-gallery.js` clicks the first category on load unless a `?filter=` / `#filter-` link already picked one (that container gets `.data("prefiltered")`). Without All there'd be no way back to the unfiltered view, hence opening on the first category.
+
+**Filter Alignment (`filter_align`, v2.3.0):** `left` (default) | `center` | `right` → `.clearph-gallery-filters--center/--right` (flex `justify-content`). Shortcode attr + WPBakery Filter-tab dropdown.
+
 ## Filter Uniform Grid (v1.6.0)
 
 When a category filter is activated in the public-facing gallery, visible items get **uniform sizing** (`span 2` col × `span 2` row = 1 visual col square) so they always line up cleanly — regardless of the original designed layout.
