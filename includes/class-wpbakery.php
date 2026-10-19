@@ -189,6 +189,18 @@ class ClearPH_Masonry_WPBakery
                 ),
                 array(
                     'type'       => 'dropdown',
+                    'heading'    => __('Filtered Layout', 'clearph-masonry-gallery'),
+                    'param_name' => 'filter_layout',
+                    'value'      => array(
+                        $inherit                                                => '',
+                        __('Keep masonry sizes', 'clearph-masonry-gallery')    => 'masonry',
+                        __('Uniform grid', 'clearph-masonry-gallery')          => 'uniform',
+                    ),
+                    'description' => __('How items are sized while a category filter is active.', 'clearph-masonry-gallery'),
+                    'group'      => __('Filter', 'clearph-masonry-gallery'),
+                ),
+                array(
+                    'type'       => 'dropdown',
                     'heading'    => __('Filter Animation Speed', 'clearph-masonry-gallery'),
                     'param_name' => 'filter_speed',
                     'value'      => array(

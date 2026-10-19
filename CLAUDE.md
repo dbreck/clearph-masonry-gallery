@@ -383,6 +383,9 @@ Gallery setting `filter_all_last` (checkbox). When checked, the "All" filter but
 
 ## Filter Uniform Grid (v1.6.0)
 
+**Filtered Layout (`filter_layout`, v2.4.1):** `masonry` (keep each item's own spans while filtered) | `uniform` (the span-2 behavior below). Unsaved galleries resolve to `masonry` when `filter_hide_all` is on (a filter is then always active, so uniform meant the masonry was never seen; it showed for a moment on load, then snapped) and `uniform` otherwise. Emitted as `data-filter-layout`; `applyLayout()` restores original spans and skips `.is-filtered` in masonry mode, so tablet/phone span overrides keep working. The Hide-All opening click is triggered with `{ instant: true }` (no animation on load).
+
+
 When a category filter is activated in the public-facing gallery, visible items get **uniform sizing** (`span 2` col × `span 2` row = 1 visual col square) so they always line up cleanly — regardless of the original designed layout.
 
 **Implementation** (`public/js/masonry-gallery.js` filter handler):

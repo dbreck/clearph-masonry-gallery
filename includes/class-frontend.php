@@ -64,6 +64,7 @@ class ClearPH_Frontend
             'filter_hide_all'        => '',
             'filter_align'           => '',
             'filter_speed'           => '',
+            'filter_layout'          => '',
         ), $atts);
 
         $gallery_id = 0;
@@ -118,7 +119,7 @@ class ClearPH_Frontend
         $raw_keys = array(
             'object_fit', 'object_position', 'border_radius', 'column_margin',
             'label_placement', 'label_color', 'filter_animation', 'lightbox_transition',
-            'filter_align', 'filter_speed',
+            'filter_align', 'filter_speed', 'filter_layout',
         );
 
         foreach ($bool_keys as $key) {
@@ -285,6 +286,11 @@ class ClearPH_Frontend
         $html .= ' data-column-margin="' . esc_attr($settings['column_margin']) . '"';
         $html .= ' data-filter-animation="' . esc_attr($settings['filter_animation']) . '"';
         $html .= ' data-filter-speed="' . esc_attr(isset($settings['filter_speed']) ? $settings['filter_speed'] : 'normal') . '"';
+        // Unsaved (pre-2.4.1 galleries): keep masonry when "All" is hidden, uniform otherwise
+        $filter_layout = !empty($settings['filter_layout'])
+            ? $settings['filter_layout']
+            : (!empty($settings['filter_hide_all']) ? 'masonry' : 'uniform');
+        $html .= ' data-filter-layout="' . ($filter_layout === 'uniform' ? 'uniform' : 'masonry') . '"';
         $html .= ' data-gallery-group="' . esc_attr($gallery_group) . '"';
         $html .= ' data-gallery-id="' . esc_attr($gallery_id) . '"';
         $html .= ' data-show-lightbox-captions="' . ($use_labels_for_lightbox ? 'true' : 'false') . '"';

@@ -5,6 +5,12 @@ All notable changes to this project are documented in this file.
 The format loosely follows [Keep a Changelog](https://keepachangelog.com/) and this
 project adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.4.1] — 2026-10-19
+
+### Fixes
+- **Masonry snapped to a uniform grid on galleries with "All" hidden.** Hiding "All" makes the gallery open on its first category, and every active filter switched items to the uniform one-column grid, so the masonry layout showed for a moment on load and then snapped flat. New **Filtered Layout** setting (Filter Settings, also the `filter_layout` shortcode attribute and the WPBakery Filter tab): **Keep masonry sizes** or **Uniform grid**. Galleries that haven't saved it default to Keep masonry sizes when "All" is hidden, and to Uniform grid (the previous behavior) otherwise.
+- The first category is now applied instantly on load when "All" is hidden, with no animation or visible reflow.
+
 ## [2.4.0] — 2026-10-19
 
 ### Features

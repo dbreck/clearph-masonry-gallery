@@ -336,6 +336,23 @@ class ClearPH_Gallery_Post_Type
                 </td>
             </tr>
             <tr>
+                <th><label for="filter_layout">Filtered Layout</label></th>
+                <td>
+                    <?php
+                    // Unsaved: keep masonry when "All" is hidden (a filter is always
+                    // active then), uniform otherwise (the pre-2.4.1 behavior)
+                    $filter_layout = !empty($settings['filter_layout'])
+                        ? $settings['filter_layout']
+                        : (!empty($settings['filter_hide_all']) ? 'masonry' : 'uniform');
+                    ?>
+                    <select id="filter_layout" name="filter_layout">
+                        <option value="masonry" <?php selected($filter_layout, 'masonry'); ?>>Keep masonry sizes</option>
+                        <option value="uniform" <?php selected($filter_layout, 'uniform'); ?>>Uniform grid (all items one column)</option>
+                    </select>
+                    <p class="description">How items are sized while a category filter is active. With "All" hidden a filter is always active, so pick Keep masonry sizes to see the masonry layout.</p>
+                </td>
+            </tr>
+            <tr>
                 <th><label for="filter_speed">Filter Animation Speed</label></th>
                 <td>
                     <select id="filter_speed" name="filter_speed">
@@ -1039,6 +1056,7 @@ class ClearPH_Gallery_Post_Type
             'filter_hide_all' => isset($_POST['filter_hide_all']) ? 1 : 0,
             'filter_align' => (isset($_POST['filter_align']) && in_array($_POST['filter_align'], array('left', 'center', 'right'), true)) ? $_POST['filter_align'] : 'left',
             'filter_animation' => $this->sanitize_filter_animation(isset($_POST['filter_animation']) ? $_POST['filter_animation'] : ''),
+            'filter_layout' => (isset($_POST['filter_layout']) && $_POST['filter_layout'] === 'uniform') ? 'uniform' : 'masonry',
             'filter_speed' => (isset($_POST['filter_speed']) && in_array($_POST['filter_speed'], array('fast', 'normal', 'slow'), true)) ? $_POST['filter_speed'] : 'normal',
             'label_show' => isset($_POST['label_show']) ? 1 : 0,
             'label_show_on_hover' => isset($_POST['label_show_on_hover']) ? 1 : 0,

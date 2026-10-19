@@ -298,7 +298,8 @@ jQuery(document).ready(function ($) {
     // Galleries with the "All" link hidden open on their first category
     $('.clearph-gallery-filters[data-hide-all="1"]').each(function () {
       if (!$(this).data("prefiltered")) {
-        $(this).find(".filter-btn").first().trigger("click")
+        // Instant: the opening state shouldn't animate or reflow visibly
+        $(this).find(".filter-btn").first().trigger("click", [{ instant: true }])
       }
     })
   }, 100)
@@ -386,7 +387,7 @@ jQuery(document).ready(function ($) {
     window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches
 
   // Category filtering
-  $(document).on("click", ".clearph-gallery-filters .filter-btn", function (e) {
+  $(document).on("click", ".clearph-gallery-filters .filter-btn", function (e, opts) {
     e.preventDefault()
     const $btn = $(this)
     const $filters = $btn.closest(".clearph-gallery-filters")
@@ -426,7 +427,9 @@ jQuery(document).ready(function ($) {
     // we use to commit the layout change) would never fire, leaving the gallery
     // stuck mid-filter. This matters for ?filter= links opened in a new tab,
     // which auto-click a filter on load. Hidden = filter instantly + correctly.
-    var animate = hasGsap && fx && !CLEARPH_REDUCED_MOTION && !document.hidden
+    var animate = hasGsap && fx && !CLEARPH_REDUCED_MOTION && !document.hidden && !(opts && opts.instant)
+    // Filtered Layout: keep each item's own spans, or switch to the uniform grid
+    var keepSpans = $gallery.attr("data-filter-layout") === "masonry"
     var speed = CLEARPH_FILTER_SPEED[$gallery.attr("data-filter-speed")] || 1
 
     // Classify items into entering (will be shown) and leaving (visible now,
@@ -447,13 +450,13 @@ jQuery(document).ready(function ($) {
     // Apply visibility + the uniform/restored grid spans (instant reflow).
     function applyLayout() {
       // Lets CSS stand down responsive span overrides while uniform spans apply
-      $gallery.toggleClass("is-filtered", !isShowAll)
+      $gallery.toggleClass("is-filtered", !isShowAll && !keepSpans)
       $items.each(function () {
         var $item = $(this)
         var willShow = isShowAll || ($item.data("category") || "") === filter
         $item.css("display", willShow ? "" : "none")
         if (willShow) {
-          if (isShowAll) {
+          if (isShowAll || keepSpans) {
             this.style.gridColumn = $item.data("original-grid-column") || ""
             this.style.gridRow = $item.data("original-grid-row") || ""
           } else {
