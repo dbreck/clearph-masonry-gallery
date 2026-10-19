@@ -63,6 +63,7 @@ class ClearPH_Frontend
             'filter_animation'       => '',
             'filter_hide_all'        => '',
             'filter_align'           => '',
+            'filter_speed'           => '',
         ), $atts);
 
         $gallery_id = 0;
@@ -117,7 +118,7 @@ class ClearPH_Frontend
         $raw_keys = array(
             'object_fit', 'object_position', 'border_radius', 'column_margin',
             'label_placement', 'label_color', 'filter_animation', 'lightbox_transition',
-            'filter_align',
+            'filter_align', 'filter_speed',
         );
 
         foreach ($bool_keys as $key) {
@@ -283,6 +284,7 @@ class ClearPH_Frontend
         $html .= ' data-border-radius="' . esc_attr($settings['border_radius']) . '"';
         $html .= ' data-column-margin="' . esc_attr($settings['column_margin']) . '"';
         $html .= ' data-filter-animation="' . esc_attr($settings['filter_animation']) . '"';
+        $html .= ' data-filter-speed="' . esc_attr(isset($settings['filter_speed']) ? $settings['filter_speed'] : 'normal') . '"';
         $html .= ' data-gallery-group="' . esc_attr($gallery_group) . '"';
         $html .= ' data-gallery-id="' . esc_attr($gallery_id) . '"';
         $html .= ' data-show-lightbox-captions="' . ($use_labels_for_lightbox ? 'true' : 'false') . '"';

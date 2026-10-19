@@ -18,6 +18,15 @@ class ClearPH_Assets {
             true
         );
 
+        // Opt-in (Settings > Clear pH Gallery > Animations): bundled GSAP for
+        // sites that don't load their own. masonry-gallery.js injects it only
+        // on pages with filters and only if window.gsap is missing.
+        if (get_option('clearph_gsap_source', 'site') === 'bundled') {
+            wp_localize_script('clearph-masonry-frontend', 'clearphMasonry', array(
+                'gsapUrl' => CLEARPH_MASONRY_PLUGIN_URL . 'public/js/vendor/gsap.min.js?ver=3.15.0',
+            ));
+        }
+
         wp_register_style(
             'clearph-masonry-frontend',
             CLEARPH_MASONRY_PLUGIN_URL . 'public/css/gallery.css',

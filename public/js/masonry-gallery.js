@@ -270,6 +270,16 @@ jQuery(document).ready(function ($) {
       new ClearPHGallery(this)
     })
 
+    // Opt-in bundled GSAP (Settings > Clear pH Gallery > Animations; the
+    // clearphMasonry.gsapUrl global only exists when it's on). Never a script
+    // dependency, see CLAUDE.md. Clicks before it arrives filter instantly.
+    if (typeof gsap === "undefined" && $(".clearph-gallery-filters").length && window.clearphMasonry && clearphMasonry.gsapUrl) {
+      var gsapScript = document.createElement("script")
+      gsapScript.src = clearphMasonry.gsapUrl
+      gsapScript.async = true
+      document.head.appendChild(gsapScript)
+    }
+
     // Pre-filter from URL: ?filter=CategoryName or #filter-CategoryName
     var preFilter =
       new URLSearchParams(window.location.search).get("filter") ||
@@ -328,6 +338,48 @@ jQuery(document).ready(function ($) {
       to: { opacity: 1, x: 0 },
       dur: 0.5, ease: "power3.out", stagger: { each: 0.05, from: "start" },
     },
+    // Function values run per item at tween start (gsap exists by then)
+    shuffle: {
+      from: {
+        opacity: 0,
+        x: function () { return gsap.utils.random(-90, 90) },
+        y: function () { return gsap.utils.random(-70, 70) },
+        rotation: function () { return gsap.utils.random(-10, 10) },
+        scale: 0.85,
+      },
+      to: { opacity: 1, x: 0, y: 0, rotation: 0, scale: 1 },
+      dur: 0.7, ease: "power3.out", stagger: { each: 0.035, from: "random" },
+    },
+    ripple: {
+      from: { opacity: 0, scale: 0.6 },
+      to: { opacity: 1, scale: 1 },
+      dur: 0.55, ease: "power2.out", stagger: { each: 0.06, from: "center", grid: "auto" },
+    },
+    reveal: {
+      from: { clipPath: "inset(100% 0% 0% 0%)" },
+      to: { clipPath: "inset(0% 0% 0% 0%)" },
+      dur: 0.7, ease: "power3.inOut", stagger: 0.06,
+    },
+    zoom: {
+      from: { opacity: 0, scale: 1.2 },
+      to: { opacity: 1, scale: 1 },
+      dur: 0.6, ease: "power3.out", stagger: 0.05,
+    },
+    // Glide (FLIP): items that stay visible move/resize from their old spot
+    // to the new one; this preset is the entrance for newly shown items
+    glide: {
+      from: { opacity: 0, scale: 0.85 },
+      to: { opacity: 1, scale: 1 },
+      dur: 0.6, ease: "power3.inOut", stagger: 0.02,
+    },
+  }
+
+  // Filter Animation Speed: multiplies durations and staggers
+  var CLEARPH_FILTER_SPEED = { fast: 0.6, normal: 1, slow: 1.6 }
+
+  function clearphScaleStagger(stagger, k) {
+    if (typeof stagger === "number") return stagger * k
+    return Object.assign({}, stagger, { each: stagger.each * k })
   }
 
   var CLEARPH_REDUCED_MOTION =
@@ -343,6 +395,9 @@ jQuery(document).ready(function ($) {
     const filter = $btn.data("filter")
 
     if (!$gallery.length) return
+
+    // Leftover Glide ghosts from a click mid-animation
+    $gallery.children(".clearph-filter-ghost").remove()
 
     // Update active state
     $filters.find(".filter-btn").removeClass("active")
@@ -372,6 +427,7 @@ jQuery(document).ready(function ($) {
     // stuck mid-filter. This matters for ?filter= links opened in a new tab,
     // which auto-click a filter on load. Hidden = filter instantly + correctly.
     var animate = hasGsap && fx && !CLEARPH_REDUCED_MOTION && !document.hidden
+    var speed = CLEARPH_FILTER_SPEED[$gallery.attr("data-filter-speed")] || 1
 
     // Classify items into entering (will be shown) and leaving (visible now,
     // about to be hidden) BEFORE touching the DOM.
@@ -420,23 +476,115 @@ jQuery(document).ready(function ($) {
         entering,
         fx.from,
         Object.assign({}, fx.to, {
-          duration: fx.dur,
+          duration: fx.dur * speed,
           ease: fx.ease,
-          stagger: fx.stagger,
-          clearProps: "transform,filter,opacity",
+          stagger: clearphScaleStagger(fx.stagger, speed),
+          clearProps: "transform,filter,opacity,clip-path",
         })
       )
     }
 
-    if (animate && leaving.length) {
+    // Glide: FLIP. Measure where visible items are, reflow, then animate each
+    // one that stays from its old box to its new one. Departing items fade out
+    // as absolutely positioned copies at their old spots, so the grid can
+    // reflow underneath them straight away.
+    function playGlide() {
+      var dur = fx.dur * speed
+      var gallery = $gallery[0]
+      var before = new Map()
+      $items.each(function () {
+        if (this.style.display !== "none") before.set(this, this.getBoundingClientRect())
+      })
+
+      if (getComputedStyle(gallery).position === "static") gallery.style.position = "relative"
+      var gRect = gallery.getBoundingClientRect()
+      var ghosts = leaving.map(function (el) {
+        var r = before.get(el)
+        var ghost = el.cloneNode(true)
+        ghost.classList.add("clearph-filter-ghost")
+        ghost.classList.remove("lightbox-clickable")
+        ghost.removeAttribute("data-category")
+        Object.assign(ghost.style, {
+          position: "absolute",
+          left: r.left - gRect.left - gallery.clientLeft + "px",
+          top: r.top - gRect.top - gallery.clientTop + "px",
+          width: r.width + "px",
+          height: r.height + "px",
+          margin: "0",
+          pointerEvents: "none",
+          zIndex: "-1", // under the moving items (the gallery's contain: layout keeps it inside)
+        })
+        gallery.appendChild(ghost)
+        return ghost
+      })
+
+      applyLayout()
+
+      gsap.killTweensOf(entering)
+      var arriving = []
+      entering.forEach(function (el) {
+        var b = before.get(el)
+        if (!b) {
+          arriving.push(el)
+          return
+        }
+        var a = el.getBoundingClientRect()
+        if (!a.width || !a.height) return
+        gsap.fromTo(
+          el,
+          {
+            x: b.left - a.left,
+            y: b.top - a.top,
+            scaleX: b.width / a.width,
+            scaleY: b.height / a.height,
+            transformOrigin: "0 0",
+            opacity: 1,
+          },
+          { x: 0, y: 0, scaleX: 1, scaleY: 1, duration: dur, ease: fx.ease, clearProps: "transform,opacity" }
+        )
+      })
+
+      if (arriving.length) {
+        gsap.fromTo(
+          arriving,
+          fx.from,
+          Object.assign({}, fx.to, {
+            duration: dur * 0.7,
+            delay: dur * 0.3,
+            ease: "power2.out",
+            stagger: clearphScaleStagger(fx.stagger, speed),
+            clearProps: "transform,opacity",
+          })
+        )
+      }
+
+      if (ghosts.length) {
+        gsap.to(ghosts, {
+          opacity: 0,
+          scale: 0.85,
+          duration: dur * 0.5,
+          ease: "power2.in",
+          onComplete: function () {
+            ghosts.forEach(function (g) {
+              g.remove()
+            })
+          },
+        })
+      }
+    }
+
+    if (animate && animType === "glide") {
+      playGlide()
+    } else if (animate && leaving.length) {
       // Quick fade-out of the departing items, THEN reflow + staggered enter so
       // the layout doesn't snap while items are still on screen.
       gsap.killTweensOf(leaving)
       gsap.to(leaving, {
         opacity: 0,
-        duration: 0.2,
+        duration: 0.2 * speed,
         ease: "power1.in",
-        stagger: 0.015,
+        // Total, not per item: a big gallery shouldn't wait ~1s before entering
+        stagger: { amount: 0.15 * speed },
         onComplete: function () {
           gsap.set(leaving, { clearProps: "opacity" })
           applyLayout()

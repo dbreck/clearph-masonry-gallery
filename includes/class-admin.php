@@ -214,6 +214,49 @@ class ClearPH_Admin
             'clearph-gallery-settings',
             'clearph_protection_section'
         );
+
+        register_setting('clearph_gallery_settings', 'clearph_gsap_source', array(
+            'type' => 'string',
+            'sanitize_callback' => function ($val) {
+                return $val === 'bundled' ? 'bundled' : 'site';
+            },
+            'default' => 'site'
+        ));
+
+        add_settings_section(
+            'clearph_animation_section',
+            __('Animations', 'clearph'),
+            function () {
+                echo '<p>' . esc_html__('Filter animations run on GSAP. The plugin never loads GSAP unless you tell it to, so it can\'t clash with a theme or plugin that already does.', 'clearph') . '</p>';
+            },
+            'clearph-gallery-settings'
+        );
+
+        add_settings_field(
+            'clearph_gsap_source',
+            __('GSAP', 'clearph'),
+            array($this, 'render_gsap_source_field'),
+            'clearph-gallery-settings',
+            'clearph_animation_section'
+        );
+    }
+
+    public function render_gsap_source_field()
+    {
+        $value = get_option('clearph_gsap_source', 'site');
+    ?>
+        <fieldset>
+            <label style="display:block; margin-bottom:6px;">
+                <input type="radio" name="clearph_gsap_source" value="site" <?php checked($value, 'site'); ?> />
+                <?php esc_html_e('Use the site\'s GSAP (recommended when the theme or another plugin loads it)', 'clearph'); ?>
+            </label>
+            <label style="display:block; margin-bottom:6px;">
+                <input type="radio" name="clearph_gsap_source" value="bundled" <?php checked($value, 'bundled'); ?> />
+                <?php esc_html_e('Load the plugin\'s bundled GSAP when the page has none', 'clearph'); ?>
+            </label>
+            <p class="description"><?php esc_html_e('Only switch this on for sites that don\'t load GSAP themselves (without it, filter clicks swap instantly with no animation). It loads only on pages with gallery filters, and only if GSAP isn\'t already there, but a site that loads its own GSAP late could still end up with two copies, so leave it off on GSAP sites.', 'clearph'); ?></p>
+        </fieldset>
+    <?php
     }
 
     public function render_scope_field()

@@ -5,6 +5,21 @@ All notable changes to this project are documented in this file.
 The format loosely follows [Keep a Changelog](https://keepachangelog.com/) and this
 project adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.4.0] — 2026-10-19
+
+### Features
+- **Five new filter animations** (Filter Settings → Filter Animation, also the `filter_animation` shortcode attribute and the WPBakery Filter tab):
+  - **Glide**: items that stay visible slide and resize into their new spots, departing items shrink away where they were, new ones scale in. Shows best when switching between All and a category.
+  - **Shuffle In**: items arrive from random offsets and angles.
+  - **Ripple**: pop-in that spreads out from the center of the grid.
+  - **Wipe Reveal**: each item uncovers from the bottom up.
+  - **Zoom Settle**: items ease down from slightly oversized into place.
+- **New "Filter Animation Speed" setting**: Fast / Normal / Slow, applies to every effect (also `filter_speed` shortcode attribute and WPBakery Filter tab).
+- **New site-wide "GSAP" setting** (Settings → Clear pH Gallery → Animations). Filter animations run on GSAP, which some Salient builds don't ship (without it, filter clicks swap instantly). Default **Use the site's GSAP** never loads anything, so there's no risk of clashing with a theme or plugin that already runs GSAP. **Load the plugin's bundled GSAP when the page has none** (GSAP 3.15.0) is opt-in for sites without their own: it loads only on pages with gallery filters and only if GSAP isn't already present. Leave it off on GSAP sites.
+
+### Changes
+- The exit fade before a filter's entrance is capped at 0.15s total instead of 15ms per item, so large galleries no longer wait about a second before new items appear.
+
 ## [2.3.0] — 2026-10-19
 
 ### Features

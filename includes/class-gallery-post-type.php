@@ -132,6 +132,7 @@ class ClearPH_Gallery_Post_Type
             'filter_hide_all' => false,
             'filter_align' => 'left',
             'filter_animation' => 'fade-up',
+            'filter_speed' => 'normal',
             'label_show' => false,
             'label_show_on_hover' => false,
             'label_show_on_lightbox' => false,
@@ -318,6 +319,11 @@ class ClearPH_Gallery_Post_Type
                             'flip'    => '3D Flip',
                             'blur'    => 'Blur In',
                             'slide'   => 'Slide In',
+                            'glide'   => 'Glide (items move to their new spots)',
+                            'shuffle' => 'Shuffle In (scattered)',
+                            'ripple'  => 'Ripple (from the center)',
+                            'reveal'  => 'Wipe Reveal',
+                            'zoom'    => 'Zoom Settle',
                             'none'    => 'None (instant)',
                         );
                         $current_anim = isset($settings['filter_animation']) ? $settings['filter_animation'] : 'fade-up';
@@ -326,7 +332,17 @@ class ClearPH_Gallery_Post_Type
                             <option value="<?php echo esc_attr($value); ?>" <?php selected($current_anim, $value); ?>><?php echo esc_html($label); ?></option>
                         <?php endforeach; ?>
                     </select>
-                    <p class="description">How items animate in when a category filter is clicked. Staggered effects cascade item-by-item (requires GSAP; falls back to a simple fade otherwise).</p>
+                    <p class="description">How items animate in when a category filter is clicked. Staggered effects cascade item-by-item; Glide moves items that stay visible to their new positions (requires GSAP; falls back to a simple fade otherwise).</p>
+                </td>
+            </tr>
+            <tr>
+                <th><label for="filter_speed">Filter Animation Speed</label></th>
+                <td>
+                    <select id="filter_speed" name="filter_speed">
+                        <?php foreach (array('fast' => 'Fast', 'normal' => 'Normal', 'slow' => 'Slow') as $value => $label) : ?>
+                            <option value="<?php echo esc_attr($value); ?>" <?php selected(isset($settings['filter_speed']) ? $settings['filter_speed'] : 'normal', $value); ?>><?php echo esc_html($label); ?></option>
+                        <?php endforeach; ?>
+                    </select>
                 </td>
             </tr>
         </table>
@@ -986,7 +1002,7 @@ class ClearPH_Gallery_Post_Type
 
     private function sanitize_filter_animation($value)
     {
-        $allowed = array('fade-up', 'fade', 'scale', 'flip', 'blur', 'slide', 'none');
+        $allowed = array('fade-up', 'fade', 'scale', 'flip', 'blur', 'slide', 'glide', 'shuffle', 'ripple', 'reveal', 'zoom', 'none');
         return in_array($value, $allowed, true) ? $value : 'fade-up';
     }
 
@@ -1023,6 +1039,7 @@ class ClearPH_Gallery_Post_Type
             'filter_hide_all' => isset($_POST['filter_hide_all']) ? 1 : 0,
             'filter_align' => (isset($_POST['filter_align']) && in_array($_POST['filter_align'], array('left', 'center', 'right'), true)) ? $_POST['filter_align'] : 'left',
             'filter_animation' => $this->sanitize_filter_animation(isset($_POST['filter_animation']) ? $_POST['filter_animation'] : ''),
+            'filter_speed' => (isset($_POST['filter_speed']) && in_array($_POST['filter_speed'], array('fast', 'normal', 'slow'), true)) ? $_POST['filter_speed'] : 'normal',
             'label_show' => isset($_POST['label_show']) ? 1 : 0,
             'label_show_on_hover' => isset($_POST['label_show_on_hover']) ? 1 : 0,
             'label_show_on_lightbox' => isset($_POST['label_show_on_lightbox']) ? 1 : 0,
