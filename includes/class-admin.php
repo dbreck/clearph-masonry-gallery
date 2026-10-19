@@ -123,9 +123,9 @@ class ClearPH_Admin
             </div>
         </script>
         <script type="text/html" id="tmpl-youtube-item">
-            <div class="gallery-item size-{{ data.masonry_size }}" data-id="{{ data.yt_id }}" data-type="youtube">
+            <div class="gallery-item size-{{ data.masonry_size }}" data-id="{{ data.yt_id }}" data-type="{{ data.type }}">
                 <div class="image-container">
-                    <img src="{{ data.thumb }}" alt="YouTube video">
+                    <img src="{{ data.thumb }}" alt="{{ data.type === 'vimeo' ? 'Vimeo video' : 'YouTube video' }}">
                     <span class="youtube-badge">
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="white"><path d="M10 8.64L15.27 12 10 15.36V8.64M8 5v14l11-7L8 5z"/></svg>
                     </span>
@@ -161,7 +161,7 @@ class ClearPH_Admin
                         </div>
                     </div>
                     <div class="youtube-url-controls" style="margin-top: 8px;">
-                        <input type="text" class="youtube-url-input" value="{{ data.url }}" placeholder="YouTube URL"
+                        <input type="text" class="youtube-url-input" value="{{ data.url }}" placeholder="YouTube or Vimeo URL"
                                style="width: 90%; padding: 4px; font-size: 10px; border: 1px solid #fff; background: rgba(255,255,255,0.2); color: #fff; border-radius: 2px;" />
                     </div>
                     <div class="category-controls" style="margin-top: 8px;">
@@ -169,7 +169,7 @@ class ClearPH_Admin
                             <option value="">No Category</option>
                         </select>
                     </div>
-                    <div class="image-filename">YouTube: {{ data.video_id }}</div>
+                    <div class="image-filename">{{ data.label }}</div>
                 </div>
             </div>
         </script>

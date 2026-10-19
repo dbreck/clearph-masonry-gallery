@@ -117,8 +117,10 @@ class ClearPH_Gallery_Post_Type
         $defaults = array(
             'masonry_enabled' => true,
             'columns' => 4,
+            'row_height' => 'fixed',
             'lightbox_enabled' => true,
             'lightbox_download_hide' => false,
+            'lightbox_transition' => 'slide',
             'image_size' => 'large',
             'object_fit' => 'cover',
             'object_position' => 'center center',
@@ -159,6 +161,16 @@ class ClearPH_Gallery_Post_Type
                 </td>
             </tr>
             <tr>
+                <th><label for="row_height">Row Height</label></th>
+                <td>
+                    <select id="row_height" name="row_height">
+                        <option value="fixed" <?php selected($settings['row_height'], 'fixed'); ?>>Fixed (175px)</option>
+                        <option value="proportional" <?php selected($settings['row_height'], 'proportional'); ?>>Proportional (matches column width)</option>
+                    </select>
+                    <p class="description">Proportional keeps every cell the same shape at any screen width, so images crop the same everywhere. Auto/Shuffle Masonry switch this on, since they size cells to fit each image's proportions.</p>
+                </td>
+            </tr>
+            <tr>
                 <th><label for="column_margin">Column Margin</label></th>
                 <td>
                     <input type="text" id="column_margin" name="column_margin" value="<?php echo esc_attr($settings['column_margin']); ?>" placeholder="20px">
@@ -177,6 +189,24 @@ class ClearPH_Gallery_Post_Type
                 <td>
                     <input type="checkbox" id="lightbox_download_hide" name="lightbox_download_hide" value="1" <?php checked($settings['lightbox_download_hide']); ?>>
                     <p class="description">Remove the download button from the lightbox toolbar. (Logged-out visitors never see it; this hides it for logged-in users too.)</p>
+                </td>
+            </tr>
+            <tr>
+                <th><label for="lightbox_transition">Lightbox Transition</label></th>
+                <td>
+                    <select id="lightbox_transition" name="lightbox_transition">
+                        <?php
+                        $lightbox_transitions = array(
+                            'slide'  => 'Slide',
+                            'fade'   => 'Fade',
+                            'resize' => 'Resize to Next Image',
+                        );
+                        foreach ($lightbox_transitions as $value => $label) :
+                        ?>
+                            <option value="<?php echo esc_attr($value); ?>" <?php selected($settings['lightbox_transition'], $value); ?>><?php echo esc_html($label); ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                    <p class="description">How the lightbox moves between items. Resize crossfades and morphs the frame from the current image's shape to the next one's (swiping on touch devices still slides).</p>
                 </td>
             </tr>
             <tr>
@@ -415,9 +445,13 @@ class ClearPH_Gallery_Post_Type
         <div id="gallery-builder">
             <div class="gallery-actions">
                 <button type="button" class="button" id="add-images">Add Images</button>
-                <button type="button" class="button" id="add-youtube">Add YouTube Video</button>
+                <button type="button" class="button" id="add-video" title="Add a YouTube or Vimeo video">Add Video</button>
                 <button type="button" class="button button-primary" id="order-visually">Order Visually</button>
                 <button type="button" class="button" id="clear-gallery">Clear All</button>
+                <span class="clearph-masonry-bulk-actions"<?php echo $settings['masonry_enabled'] ? '' : ' style="display:none"'; ?>>
+                    <button type="button" class="button clearph-auto-masonry" title="Size every item to fit its image proportions">Auto Masonry</button>
+                    <button type="button" class="button clearph-shuffle-masonry" title="Proportion-aware layout with a new arrangement on every click">Shuffle Masonry</button>
+                </span>
 
                 <div class="gallery-ordering-controls">
                     <div class="button-group">
@@ -450,7 +484,7 @@ class ClearPH_Gallery_Post_Type
                 <?php if (!empty($images)): ?>
                     <?php foreach ($images as $item_id): ?>
                         <?php
-                        if (is_string($item_id) && strpos($item_id, 'yt_') === 0) {
+                        if (ClearPH_Media_Handler::external_video_provider($item_id)) {
                             $this->render_youtube_item($item_id, $youtube_items, $youtube_sizing);
                         } else {
                             $this->render_image_item($item_id, $image_sizing);
@@ -486,8 +520,8 @@ class ClearPH_Gallery_Post_Type
                     </div>
                     <div class="clearph-order-modal__header-tools">
                         <div class="clearph-layout-bulk-actions" data-tool-layout-only style="display:none">
-                            <button type="button" class="button" id="clearph-randomize-layout" title="Apply random varied layout to all items">Randomize Layout</button>
-                            <button type="button" class="button" id="clearph-smart-layout" title="Size items based on image proportions">Smart Layout</button>
+                            <button type="button" class="button clearph-auto-masonry" title="Size every item to fit its image proportions">Auto Masonry</button>
+                            <button type="button" class="button clearph-shuffle-masonry" title="Proportion-aware layout with a new arrangement on every click">Shuffle Masonry</button>
                         </div>
                         <label class="clearph-order-modal__size-control" data-tool-layout-only style="display:none">
                             Container width
@@ -613,8 +647,8 @@ class ClearPH_Gallery_Post_Type
                             </div>
 
                             <div class="clearph-layout-panel__section clearph-layout-panel__section--youtube" style="display:none">
-                                <label class="clearph-layout-panel__label">YouTube URL</label>
-                                <input type="text" class="layout-youtube-url-input" placeholder="https://youtube.com/...">
+                                <label class="clearph-layout-panel__label">Video URL</label>
+                                <input type="text" class="layout-youtube-url-input" placeholder="YouTube or Vimeo URL">
                             </div>
                         </div>
                     </aside>
@@ -624,28 +658,30 @@ class ClearPH_Gallery_Post_Type
     <?php
     }
 
+    /**
+     * Admin builder item for an external video (YouTube 'yt_…' or Vimeo 'vm_…').
+     */
     private function render_youtube_item($yt_id, $youtube_items, $youtube_sizing)
     {
-        $video_id = substr($yt_id, 3); // Strip 'yt_' prefix
         $meta = isset($youtube_items[$yt_id]) ? $youtube_items[$yt_id] : array();
         $sizing = isset($youtube_sizing[$yt_id]) ? $youtube_sizing[$yt_id] : array();
+        $video = ClearPH_Media_Handler::external_video_display($yt_id, $meta);
 
         $url = isset($meta['url']) ? $meta['url'] : '';
-        $is_short = isset($meta['is_short']) ? $meta['is_short'] : false;
 
-        $masonry_size = isset($sizing['masonry_size']) ? $sizing['masonry_size'] : ($is_short ? 'tall' : 'regular');
+        $masonry_size = isset($sizing['masonry_size']) ? $sizing['masonry_size'] : ($video['is_tall'] ? 'tall' : 'regular');
         $column_span = isset($sizing['column_span']) ? $sizing['column_span'] : '';
         $row_span = isset($sizing['row_span']) ? $sizing['row_span'] : '';
 
-        $thumb_url = 'https://img.youtube.com/vi/' . esc_attr($video_id) . '/hqdefault.jpg';
+        $thumb_url = $video['thumb_hq'];
     ?>
-        <div class="gallery-item size-<?php echo esc_attr($masonry_size); ?>" data-id="<?php echo esc_attr($yt_id); ?>" data-type="youtube"<?php
+        <div class="gallery-item size-<?php echo esc_attr($masonry_size); ?>" data-id="<?php echo esc_attr($yt_id); ?>" data-type="<?php echo esc_attr($video['provider']); ?>"<?php
             if ($column_span && $row_span) {
                 echo ' style="grid-column: span ' . absint($column_span) . '; grid-row: span ' . absint($row_span) . ';"';
             }
         ?>>
             <div class="image-container">
-                <img src="<?php echo esc_url($thumb_url); ?>" alt="YouTube video">
+                <img src="<?php echo esc_url($thumb_url); ?>" alt="<?php echo $video['provider'] === 'vimeo' ? 'Vimeo video' : 'YouTube video'; ?>">
                 <span class="youtube-badge">
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="white"><path d="M10 8.64L15.27 12 10 15.36V8.64M8 5v14l11-7L8 5z"/></svg>
                 </span>
@@ -698,7 +734,7 @@ class ClearPH_Gallery_Post_Type
                     </label>
                 </div>
                 <div class="youtube-url-controls" style="margin-top: 8px;">
-                    <input type="text" class="youtube-url-input" value="<?php echo esc_attr($url); ?>" placeholder="YouTube URL"
+                    <input type="text" class="youtube-url-input" value="<?php echo esc_attr($url); ?>" placeholder="YouTube or Vimeo URL"
                            style="width: 90%; padding: 4px; font-size: 10px; border: 1px solid #fff; background: rgba(255,255,255,0.2); color: #fff; border-radius: 2px;" />
                 </div>
                 <div class="category-controls" style="margin-top: 8px;">
@@ -706,7 +742,7 @@ class ClearPH_Gallery_Post_Type
                         <option value="">No Category</option>
                     </select>
                 </div>
-                <div class="image-filename">YouTube: <?php echo esc_html($video_id); ?></div>
+                <div class="image-filename"><?php echo esc_html($video['label']); ?></div>
             </div>
         </div>
     <?php
@@ -922,6 +958,12 @@ class ClearPH_Gallery_Post_Type
         return in_array($value, $allowed, true) ? $value : 'p';
     }
 
+    private function sanitize_lightbox_transition($value)
+    {
+        $allowed = array('slide', 'fade', 'resize');
+        return in_array($value, $allowed, true) ? $value : 'slide';
+    }
+
     private function sanitize_filter_animation($value)
     {
         $allowed = array('fade-up', 'fade', 'scale', 'flip', 'blur', 'slide', 'none');
@@ -948,6 +990,8 @@ class ClearPH_Gallery_Post_Type
             'columns' => absint($_POST['columns']),
             'lightbox_enabled' => isset($_POST['lightbox_enabled']) ? 1 : 0,
             'lightbox_download_hide' => isset($_POST['lightbox_download_hide']) ? 1 : 0,
+            'row_height' => (isset($_POST['row_height']) && $_POST['row_height'] === 'proportional') ? 'proportional' : 'fixed',
+            'lightbox_transition' => $this->sanitize_lightbox_transition(isset($_POST['lightbox_transition']) ? $_POST['lightbox_transition'] : ''),
             'image_size' => sanitize_text_field($_POST['image_size']),
             'object_fit' => sanitize_text_field($_POST['object_fit']),
             'object_position' => $this->sanitize_object_position(isset($_POST['object_position']) ? $_POST['object_position'] : ''),
@@ -981,17 +1025,17 @@ class ClearPH_Gallery_Post_Type
             update_post_meta($post_id, '_clearph_image_categories', $image_categories);
         }
 
-        // Save images (mixed: integer attachment IDs + yt_ YouTube placeholders)
+        // Save images (mixed: integer attachment IDs + yt_/vm_ external video placeholders)
         if (isset($_POST['gallery_images'])) {
             $raw_items = explode(',', $_POST['gallery_images']);
             $images = array();
             foreach ($raw_items as $item) {
                 $item = trim($item);
-                if (strpos($item, 'yt_') === 0) {
-                    // YouTube placeholder - sanitize the video ID portion
+                if (ClearPH_Media_Handler::external_video_provider($item)) {
+                    // External video placeholder - sanitize the video ID portion
                     $video_id = preg_replace('/[^a-zA-Z0-9_-]/', '', substr($item, 3));
                     if ($video_id) {
-                        $images[] = 'yt_' . $video_id;
+                        $images[] = substr($item, 0, 3) . $video_id;
                     }
                 } else {
                     $int_val = absint($item);
@@ -1010,12 +1054,22 @@ class ClearPH_Gallery_Post_Type
                 $sanitized = array();
                 foreach ($youtube_items as $yt_id => $meta) {
                     $yt_id = sanitize_text_field($yt_id);
-                    if (strpos($yt_id, 'yt_') !== 0) continue;
-                    $sanitized[$yt_id] = array(
+                    $provider = ClearPH_Media_Handler::external_video_provider($yt_id);
+                    if (!$provider) continue;
+                    $entry = array(
                         'video_id' => sanitize_text_field(isset($meta['video_id']) ? $meta['video_id'] : ''),
                         'url' => esc_url_raw(isset($meta['url']) ? $meta['url'] : ''),
                         'is_short' => !empty($meta['is_short']),
                     );
+                    if ($provider === 'vimeo') {
+                        $entry['provider'] = 'vimeo';
+                        $entry['hash'] = preg_replace('/[^a-f0-9]/i', '', isset($meta['hash']) ? $meta['hash'] : '');
+                        $entry['thumb'] = esc_url_raw(isset($meta['thumb']) ? $meta['thumb'] : '');
+                        $entry['width'] = absint(isset($meta['width']) ? $meta['width'] : 0);
+                        $entry['height'] = absint(isset($meta['height']) ? $meta['height'] : 0);
+                        $entry['title'] = sanitize_text_field(isset($meta['title']) ? $meta['title'] : '');
+                    }
+                    $sanitized[$yt_id] = $entry;
                 }
                 update_post_meta($post_id, '_clearph_youtube_items', $sanitized);
             }
@@ -1028,7 +1082,7 @@ class ClearPH_Gallery_Post_Type
                 $sanitized = array();
                 foreach ($youtube_sizing as $yt_id => $sizing) {
                     $yt_id = sanitize_text_field($yt_id);
-                    if (strpos($yt_id, 'yt_') !== 0) continue;
+                    if (!ClearPH_Media_Handler::external_video_provider($yt_id)) continue;
                     $sanitized[$yt_id] = array(
                         'column_span' => absint(isset($sizing['column_span']) ? $sizing['column_span'] : 2),
                         'row_span' => absint(isset($sizing['row_span']) ? $sizing['row_span'] : 2),

@@ -5,6 +5,21 @@ All notable changes to this project are documented in this file.
 The format loosely follows [Keep a Changelog](https://keepachangelog.com/) and this
 project adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.2.0] — 2026-10-19
+
+### Features
+- **Auto Masonry and Shuffle Masonry buttons** on the main gallery builder bar (and in Order Visually → Layout). Auto sizes every item to fit its image's proportions and gives the same layout on every click; Shuffle gives a new arrangement each click while staying proportion-aware. Both respect the gallery's Columns setting (regular items are one visual column, with occasional 1.5-column accents and larger hero images). The "this will resize everything" confirmation shows once per page load. Replaces the old ratio-blind "Randomize Layout" and the hidden "Smart Layout".
+- **New layout algorithm** behind both buttons: skyline packing that places items exactly where CSS grid will, with no holes, scoring each cell size on crop, size and rhythm, with one-item lookahead so a cell never leaves a slot the next image can't fill. On a 49-image, mostly 16:9 test gallery, average crop dropped from ~30% to ~10%.
+- **New "Row Height" setting**: Fixed (175px, the previous behavior and still the default) or **Proportional** (row height = column width, so every cell keeps its shape at any screen width). Auto/Shuffle switch a gallery to Proportional and save it together with the sizes.
+- **Drag-to-resize handle** on the bottom-right corner of every item in the builder grid and in Layout mode. Snaps to whole grid columns/rows with a live "c × r" readout and saves through the same path as the Width/Height inputs (images, uploaded videos, YouTube and Vimeo).
+- **Vimeo support.** "Add YouTube Video" is now **Add Video** and accepts YouTube or Vimeo URLs (vimeo.com/ID, unlisted vimeo.com/ID/HASH, player.vimeo.com/video/ID?h=HASH, channel/group/showcase links). Thumbnail and real dimensions come from Vimeo's oEmbed API, so Auto Masonry sizes Vimeo items correctly; the lightbox plays them through Vimeo's player. A video's URL can be edited later, including switching between YouTube and Vimeo.
+- **New "Lightbox Transition" setting**: Slide (default, previous behavior), Fade, or **Resize to Next Image**, which crossfades while the frame morphs from the current image's shape to the next one's. Also available as a WPBakery Lightbox-tab override and the `lightbox_transition` shortcode attribute.
+
+### Fixes
+- **Images were cropped twice in larger cells.** Tall/Wide/Large cells loaded Salient's hard-cropped image sizes (`large_featured` 1870×770, `wide` 1000×500), so `object-fit: cover` cropped an already-cropped image (a square photo in a 4×4 cell showed a 2.43:1 strip). Gallery images now always use uncropped sizes; srcset still picks an appropriately small file. This affects every gallery.
+- **Tablet layouts (481–768px):** items 3 or 6 micro-columns wide left gaps or created phantom columns when galleries drop to 4 tracks. Wide items now go full width there, with row spans re-picked per image to keep their shape.
+- **Phones (≤480px), proportional galleries:** best-fit row count per image instead of forcing every item into a single row.
+
 ## [2.1.0] — 2026-08-26
 
 ### Features

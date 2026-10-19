@@ -12,9 +12,30 @@ jQuery(document).ready(function ($) {
     }
 
     init() {
+      this.setupProportionalRows()
       this.setupLazyLoading()
       this.setupVideoPlayback()
       this.initAnimations()
+    }
+
+    // Proportional row height: each row is as tall as one grid track is wide,
+    // so a cell spanning c tracks x r rows keeps the same shape at every screen
+    // width (Auto/Shuffle Masonry size cells to image proportions on that basis).
+    // Without JS the CSS fixed row height still applies.
+    setupProportionalRows() {
+      if (!this.gallery.hasClass("masonry-enabled") || this.gallery.data("row-height") !== "proportional") return
+
+      const el = this.gallery[0]
+      const sync = () => {
+        const track = parseFloat(getComputedStyle(el).gridTemplateColumns)
+        if (track > 0) el.style.gridAutoRows = track + "px"
+      }
+      sync()
+      if ("ResizeObserver" in window) {
+        new ResizeObserver(sync).observe(el)
+      } else {
+        $(window).on("resize", sync)
+      }
     }
 
     setupLazyLoading() {
@@ -361,6 +382,8 @@ jQuery(document).ready(function ($) {
 
     // Apply visibility + the uniform/restored grid spans (instant reflow).
     function applyLayout() {
+      // Lets CSS stand down responsive span overrides while uniform spans apply
+      $gallery.toggleClass("is-filtered", !isShowAll)
       $items.each(function () {
         var $item = $(this)
         var willShow = isShowAll || ($item.data("category") || "") === filter

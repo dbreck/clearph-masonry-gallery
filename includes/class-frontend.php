@@ -48,6 +48,7 @@ class ClearPH_Frontend
             'columns'                => '',
             'lightbox_enabled'       => '',
             'lightbox_download_hide' => '',
+            'lightbox_transition'    => '',
             'object_fit'             => '',
             'object_position'        => '',
             'border_radius'          => '',
@@ -112,7 +113,7 @@ class ClearPH_Frontend
         );
         $raw_keys = array(
             'object_fit', 'object_position', 'border_radius', 'column_margin',
-            'label_placement', 'label_color', 'filter_animation',
+            'label_placement', 'label_color', 'filter_animation', 'lightbox_transition',
         );
 
         foreach ($bool_keys as $key) {
@@ -143,6 +144,8 @@ class ClearPH_Frontend
             'columns' => 4,
             'lightbox_enabled' => true,
             'lightbox_download_hide' => false,
+            'lightbox_transition' => 'slide',
+            'row_height' => 'fixed',
             'image_size' => 'large',
             'object_fit' => 'cover',
             'object_position' => 'center center',
@@ -209,14 +212,14 @@ class ClearPH_Frontend
                     }
                 }
 
-                // YouTube items
-                if (is_string($item_id) && strpos($item_id, 'yt_') === 0) {
-                    $video_id = substr($item_id, 3);
+                // External videos (YouTube / Vimeo)
+                if (ClearPH_Media_Handler::external_video_provider($item_id)) {
                     $meta = isset($youtube_items[$item_id]) ? $youtube_items[$item_id] : array();
+                    $video = ClearPH_Media_Handler::external_video_display($item_id, $meta);
                     $this->lightbox_data[$gallery_group][] = array(
                         'id' => $item_id,
                         'gallery_id' => $gallery_id,
-                        'src' => 'https://www.youtube.com/embed/' . $video_id . '?autoplay=1&rel=0',
+                        'src' => $video['embed'],
                         'type' => 'iframe',
                         'caption' => $use_labels_for_lightbox ? $label_text : ''
                     );
@@ -281,6 +284,8 @@ class ClearPH_Frontend
         $html .= ' data-show-lightbox-captions="' . ($use_labels_for_lightbox ? 'true' : 'false') . '"';
         $html .= ' data-hide-lightbox-caption="' . (!empty($settings['lightbox_caption_hide']) ? 'true' : 'false') . '"';
         $html .= ' data-hide-lightbox-download="' . (!empty($settings['lightbox_download_hide']) ? 'true' : 'false') . '"';
+        $html .= ' data-lightbox-transition="' . esc_attr($settings['lightbox_transition']) . '"';
+        $html .= ' data-row-height="' . ($settings['row_height'] === 'proportional' ? 'proportional' : 'fixed') . '"';
         if (!empty($settings['label_show'])) {
             $html .= ' data-label-show="1"';
         }
@@ -290,7 +295,7 @@ class ClearPH_Frontend
         $html .= ' style="--border-radius: ' . esc_attr($settings['border_radius']) . 'px; --column-margin: ' . esc_attr($settings['column_margin']) . ';">';
 
         foreach ($images as $item_id) {
-            if (is_string($item_id) && strpos($item_id, 'yt_') === 0) {
+            if (ClearPH_Media_Handler::external_video_provider($item_id)) {
                 $html .= $this->render_youtube_gallery_item($item_id, $youtube_items, $youtube_sizing, $settings, $gallery_group, $lightbox_enabled, $gallery_id, $image_labels);
             } else {
                 $html .= $this->render_gallery_item($item_id, $settings, $gallery_group, $lightbox_enabled, $gallery_id, $image_labels, $image_sizing);
@@ -302,17 +307,74 @@ class ClearPH_Frontend
         return $html;
     }
 
+    /**
+     * Inline grid spans for an item, plus tablet spans when they differ.
+     *
+     * At 481-768px every gallery drops to 4 tracks (2 visual columns), where a
+     * 3- or 6-wide span would leave a gap or add phantom columns. Items half the
+     * designed width or wider go full width there. Rows are re-picked to fit
+     * the image's aspect ratio when it's known (tablet cells are roughly
+     * square per track), otherwise scaled with the width change. gallery.css
+     * applies the --clearph-tablet-* values in that range only.
+     *
+     * Proportional galleries also get --clearph-phone-row: phones show one
+     * full-width item per row, and a best-fit row count beats the stylesheet's
+     * one-row-for-everything there.
+     */
+    private function grid_span_style($column_span, $row_span, $settings, $ratio = null)
+    {
+        $style = sprintf('grid-column: span %d; grid-row: span %d;', $column_span, $row_span);
+
+        $micro = absint($settings['columns']) * 2;
+        if ($micro > 4) {
+            $tablet_col = $column_span * 2 >= $micro ? 4 : 2;
+            $tablet_row = $ratio > 0
+                ? $this->best_fit_rows($ratio, $tablet_col)
+                : max(1, (int) round($row_span * $tablet_col / $column_span));
+            if ($tablet_col !== $column_span || $tablet_row !== $row_span) {
+                $style .= sprintf(' --clearph-tablet-col: span %d; --clearph-tablet-row: span %d;', $tablet_col, $tablet_row);
+            }
+        }
+
+        if ($ratio > 0 && $settings['row_height'] === 'proportional') {
+            $style .= sprintf(' --clearph-phone-row: span %d;', $this->best_fit_rows($ratio, 2));
+        }
+
+        return $style;
+    }
+
+    /**
+     * Row span that crops an image of the given aspect ratio least in a cell
+     * $col tracks wide, with rows about as tall as a track is wide.
+     */
+    private function best_fit_rows($ratio, $col)
+    {
+        $gap = 0.08; // gap as a fraction of a track
+        $best_rows = 1;
+        $best_crop = 1;
+        for ($r = 1; $r <= 12; $r++) {
+            $cell = ($col + ($col - 1) * $gap) / ($r + ($r - 1) * $gap);
+            $crop = 1 - min($ratio / $cell, $cell / $ratio);
+            if ($crop < $best_crop) {
+                $best_crop = $crop;
+                $best_rows = $r;
+            }
+        }
+        return $best_rows;
+    }
+
     private function get_image_size_for_masonry($masonry_size, $default_size)
     {
-        $size_map = array(
-            'regular' => $default_size,
-            'tall' => 'large_featured',     // Use larger size for tall images
-            'wide' => 'wide',              // Use your wide image size
-            'large' => 'large_featured',   // Use larger size for large images
-            'xl' => 'full'                 // Keep full size for XL
-        );
+        // Never hand object-fit a hard-cropped size. Salient's 'large_featured'
+        // (1870x770), 'wide' (1000x500) etc. are pre-cropped, so a cell of a
+        // different shape would crop the crop. Uncropped sizes keep the full
+        // frame, and srcset + the sizes attribute still pick a small file.
+        $subsizes = wp_get_registered_image_subsizes();
+        if (isset($subsizes[$default_size]) && !empty($subsizes[$default_size]['crop'])) {
+            return 'full';
+        }
 
-        return isset($size_map[$masonry_size]) ? $size_map[$masonry_size] : $default_size;
+        return $masonry_size === 'xl' ? 'full' : $default_size;
     }
 
     private function render_category_filters($gallery_id, $settings)
@@ -346,34 +408,38 @@ class ClearPH_Frontend
         return $html;
     }
 
+    /**
+     * Frontend item for an external video (YouTube 'yt_…' or Vimeo 'vm_…').
+     */
     private function render_youtube_gallery_item($yt_id, $youtube_items, $youtube_sizing, $settings, $gallery_group, $lightbox_enabled, $gallery_id, $image_labels = array())
     {
-        $video_id = substr($yt_id, 3);
         $meta = isset($youtube_items[$yt_id]) ? $youtube_items[$yt_id] : array();
         $sizing = isset($youtube_sizing[$yt_id]) ? $youtube_sizing[$yt_id] : array();
-        $is_short = isset($meta['is_short']) ? $meta['is_short'] : false;
+        $video = ClearPH_Media_Handler::external_video_display($yt_id, $meta);
+        $is_vimeo = $video['provider'] === 'vimeo';
 
-        $masonry_size = isset($sizing['masonry_size']) ? $sizing['masonry_size'] : ($is_short ? 'tall' : 'regular');
+        $masonry_size = isset($sizing['masonry_size']) ? $sizing['masonry_size'] : ($video['is_tall'] ? 'tall' : 'regular');
         $column_span = isset($sizing['column_span']) ? absint($sizing['column_span']) : null;
         $row_span = isset($sizing['row_span']) ? absint($sizing['row_span']) : null;
 
         $inline_style = '';
         if ($column_span && $row_span && $settings['masonry_enabled']) {
-            $inline_style = sprintf('grid-column: span %d; grid-row: span %d;', $column_span, $row_span);
+            $inline_style = $this->grid_span_style($column_span, $row_span, $settings, $video['ratio']);
         }
 
         // Get category
         $image_categories = get_post_meta($gallery_id, '_clearph_image_categories', true);
         $category = isset($image_categories[$yt_id]) ? $image_categories[$yt_id] : '';
 
-        $item_class = 'gallery-item gallery-item--youtube size-' . $masonry_size;
+        // gallery-item--youtube carries the shared external-video styling
+        $item_class = 'gallery-item gallery-item--youtube' . ($is_vimeo ? ' gallery-item--vimeo' : '') . ' size-' . $masonry_size;
         if ($lightbox_enabled) {
             $item_class .= ' lightbox-clickable';
         }
 
         $html = '<div class="' . esc_attr($item_class) . '"';
         $html .= ' data-image-id="' . esc_attr($yt_id) . '"';
-        $html .= ' data-type="youtube"';
+        $html .= ' data-type="' . esc_attr($video['provider']) . '"';
 
         if ($category) {
             $html .= ' data-category="' . esc_attr($category) . '"';
@@ -388,19 +454,22 @@ class ClearPH_Frontend
 
         $html .= '>';
 
-        // YouTube thumbnail with maxresdefault, fallback to hqdefault
-        $thumb_max = 'https://img.youtube.com/vi/' . esc_attr($video_id) . '/maxresdefault.jpg';
-        $thumb_hq = 'https://img.youtube.com/vi/' . esc_attr($video_id) . '/hqdefault.jpg';
-
-        $html .= '<img src="' . esc_url($thumb_max) . '"';
-        $html .= ' onerror="this.onerror=null;this.src=\'' . esc_url($thumb_hq) . '\';"';
-        $html .= ' alt="YouTube video" class="lazy-image"';
+        // Thumbnail (YouTube: maxresdefault, falling back to hqdefault)
+        $html .= '<img src="' . esc_url($video['thumb']) . '"';
+        if ($video['thumb_hq'] !== $video['thumb']) {
+            $html .= ' onerror="this.onerror=null;this.src=\'' . esc_url($video['thumb_hq']) . '\';"';
+        }
+        $html .= ' alt="' . ($is_vimeo ? 'Vimeo video' : 'YouTube video') . '" class="lazy-image"';
         $html .= ' style="object-fit: ' . esc_attr($settings['object_fit']) . '; object-position: ' . esc_attr($settings['object_position']) . '; width: 100%; height: 100%; cursor: ' . ($lightbox_enabled ? 'pointer' : 'default') . ';"';
         $html .= ' loading="lazy">';
 
         // Play button overlay
         $html .= '<span class="gallery-youtube-badge">';
-        $html .= '<svg width="48" height="48" viewBox="0 0 68 48"><path d="M66.52 7.74c-.78-2.93-2.49-5.41-5.42-6.19C55.79.13 34 0 34 0S12.21.13 6.9 1.55c-2.93.78-4.63 3.26-5.42 6.19C.06 13.05 0 24 0 24s.06 10.95 1.48 16.26c.78 2.93 2.49 5.41 5.42 6.19C12.21 47.87 34 48 34 48s21.79-.13 27.1-1.55c2.93-.78 4.63-3.26 5.42-6.19C67.94 34.95 68 24 68 24s-.06-10.95-1.48-16.26z" fill="rgba(255,0,0,0.85)"/><path d="M45 24L27 14v20" fill="#fff"/></svg>';
+        if ($is_vimeo) {
+            $html .= '<svg width="48" height="48" viewBox="0 0 48 48"><circle cx="24" cy="24" r="24" fill="rgba(0,0,0,0.6)"/><path d="M19 15l15 9-15 9z" fill="#fff"/></svg>';
+        } else {
+            $html .= '<svg width="48" height="48" viewBox="0 0 68 48"><path d="M66.52 7.74c-.78-2.93-2.49-5.41-5.42-6.19C55.79.13 34 0 34 0S12.21.13 6.9 1.55c-2.93.78-4.63 3.26-5.42 6.19C.06 13.05 0 24 0 24s.06 10.95 1.48 16.26c.78 2.93 2.49 5.41 5.42 6.19C12.21 47.87 34 48 34 48s21.79-.13 27.1-1.55c2.93-.78 4.63-3.26 5.42-6.19C67.94 34.95 68 24 68 24s-.06-10.95-1.48-16.26z" fill="rgba(255,0,0,0.85)"/><path d="M45 24L27 14v20" fill="#fff"/></svg>';
+        }
         $html .= '</span>';
 
         $html .= $this->render_label($yt_id, $settings, $image_labels);
@@ -474,7 +543,9 @@ class ClearPH_Frontend
 
         if ($column_span && $row_span) {
             if ($settings['masonry_enabled']) {
-                $inline_style = sprintf('grid-column: span %d; grid-row: span %d;', $column_span, $row_span);
+                $meta = wp_get_attachment_metadata($image_id);
+                $ratio = !empty($meta['width']) && !empty($meta['height']) ? $meta['width'] / $meta['height'] : null;
+                $inline_style = $this->grid_span_style($column_span, $row_span, $settings, $ratio);
             }
             $masonry_size = $this->convert_grid_to_legacy_size($column_span, $row_span);
         } else {
@@ -737,6 +808,62 @@ class ClearPH_Frontend
                 // Add lightbox data to window
                 window.clearphLightboxData = <?php echo json_encode($this->lightbox_data); ?>;
                 var clearphIsLoggedIn = <?php echo is_user_logged_in() ? 'true' : 'false'; ?>;
+                var clearphResizeDuration = 500;
+
+                // "Resize to Next Image" transition. FancyBox runs with transitionEffect
+                // off (the new slide appears instantly at its final size), then we pull
+                // the new image back to the previous image's box and animate it out to
+                // its own size while a ghost copy of the previous image fades away.
+                // beforeShow fires while the previous slide is still laid out, so its
+                // box is measured there; afterShow fires once the new one is placed.
+                function clearphResizeCapture(instance, current, firstRun) {
+                    instance.clearphResize = null;
+                    if (firstRun) return;
+                    var previous = instance.slides[instance.prevPos];
+                    if (!previous || previous === current || previous.type !== 'image' || current.type !== 'image') return;
+                    // Swiped: FancyBox is already sliding the strip, leave it alone
+                    if (!previous.$content || instance.isMoved(previous)) return;
+                    var img = previous.$content.find('.fancybox-image')[0];
+                    var rect = previous.$content[0].getBoundingClientRect();
+                    if (!img || !rect.width || !rect.height) return;
+                    instance.clearphResize = { pos: current.pos, rect: rect, src: img.currentSrc || img.src };
+                }
+
+                function clearphResizeRun(instance, current) {
+                    var m = instance.clearphResize;
+                    instance.clearphResize = null;
+                    if (!m || m.pos !== current.pos || !current.$content || current.hasError) return;
+                    var end = instance.getFitPos(current);
+                    if (!end) return;
+
+                    var $slide = current.$slide;
+                    var $content = current.$content;
+                    var slideRect = $slide[0].getBoundingClientRect();
+                    var from = {
+                        top: m.rect.top - slideRect.top,
+                        left: m.rect.left - slideRect.left,
+                        width: m.rect.width,
+                        height: m.rect.height
+                    };
+                    var $ghost = $('<img class="clearph-fancybox-ghost" alt="" aria-hidden="true">').attr('src', m.src).appendTo($slide);
+                    var done = false;
+                    var cleanup = function() {
+                        if (done) return;
+                        done = true;
+                        $content.removeClass('clearph-is-resizing').css('opacity', '');
+                        $ghost.remove();
+                    };
+
+                    $.fancybox.setTranslate($ghost, $.extend({ opacity: 1 }, from));
+                    $.fancybox.setTranslate($content.addClass('clearph-is-resizing'), $.extend({ opacity: 0 }, from));
+                    $ghost[0].offsetWidth; // force reflow so the start state paints
+
+                    $ghost.css('transition-duration', clearphResizeDuration + 'ms');
+                    $.fancybox.setTranslate($ghost, $.extend({}, end, { opacity: 0 }));
+                    $.fancybox.animate($content, $.extend({}, end, { opacity: 1 }), clearphResizeDuration, cleanup);
+                    // Fallback: a window resize mid-animation stops FancyBox's own callback
+                    setTimeout(cleanup, clearphResizeDuration + 150);
+                }
 
                 // Add click handlers for lightbox
                 $('.lightbox-clickable').on('click', function(e) {
@@ -752,6 +879,8 @@ class ClearPH_Frontend
                     const showCaptions = $galleryEl.data('show-lightbox-captions') === true || $galleryEl.data('show-lightbox-captions') === 'true';
                     const hideCaption = $galleryEl.data('hide-lightbox-caption') === true || $galleryEl.data('hide-lightbox-caption') === 'true';
                     const hideDownload = $galleryEl.data('hide-lightbox-download') === true || $galleryEl.data('hide-lightbox-download') === 'true';
+                    const transition = $galleryEl.data('lightbox-transition') || 'slide';
+                    const resize = transition === 'resize';
                     const imageId = $(this).data('image-id');
                     const lightboxData = window.clearphLightboxData[galleryGroup];
 
@@ -800,12 +929,14 @@ class ClearPH_Frontend
                             caption: item.caption || ''
                         };
                     }), {
-                        baseClass: [showCaptions ? 'clearph-fancybox-captioned' : '', hideCaption ? 'clearph-fancybox-caption-hidden' : ''].filter(Boolean).join(' '),
+                        baseClass: [showCaptions ? 'clearph-fancybox-captioned' : '', hideCaption ? 'clearph-fancybox-caption-hidden' : '', resize ? 'clearph-fancybox-resize' : ''].filter(Boolean).join(' '),
                         buttons: buttons,
                         loop: true,
                         protect: <?php echo is_user_logged_in() ? 'false' : 'true'; ?>,
                         animationEffect: "fade",
-                        transitionEffect: "slide"
+                        transitionEffect: resize ? false : (transition === 'fade' ? 'fade' : 'slide'),
+                        beforeShow: resize ? clearphResizeCapture : $.noop,
+                        afterShow: resize ? clearphResizeRun : $.noop
                     }, currentIndex);
                 });
 

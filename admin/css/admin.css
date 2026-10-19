@@ -597,12 +597,6 @@
     font-family: monospace;
 }
 
-#add-youtube {
-    background: #ff0000;
-    border-color: #cc0000;
-    color: #fff;
-}
-
 /* ===== Order Visually Modal ===== */
 .clearph-order-modal {
     position: fixed;
@@ -1110,9 +1104,70 @@
 .clearph-layout-panel__sub-label select {
     margin-top: 4px;
 }
+/* ===== Drag-to-resize handle (builder items + Layout tiles) ===== */
+.clearph-resize-handle {
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    width: 22px;
+    height: 22px;
+    z-index: 6;
+    cursor: nwse-resize;
+    touch-action: none;
+    background: linear-gradient(135deg, transparent 50%, #0073aa 50%);
+    border-bottom-right-radius: 4px;
+    opacity: 0;
+    transition: opacity 0.15s ease;
+}
 
-#add-youtube:hover {
-    background: #cc0000;
-    border-color: #990000;
+/* Grip lines */
+.clearph-resize-handle::after {
+    content: "";
+    position: absolute;
+    right: 3px;
+    bottom: 3px;
+    width: 8px;
+    height: 8px;
+    border-right: 2px solid #fff;
+    border-bottom: 2px solid #fff;
+}
+
+.gallery-item:hover > .clearph-resize-handle,
+.clearph-layout-tile:hover > .clearph-resize-handle,
+.is-resizing > .clearph-resize-handle {
+    opacity: 1;
+}
+
+@media (hover: none) {
+    .clearph-resize-handle {
+        opacity: 0.85;
+    }
+}
+
+/* Sizes only apply with masonry on */
+.sortable-gallery:not(.masonry-enabled) .clearph-resize-handle {
+    display: none;
+}
+
+.gallery-item.is-resizing,
+.clearph-layout-tile.is-resizing {
+    outline: 2px dashed #0073aa;
+    outline-offset: 2px;
+    z-index: 5;
+    transition: none;
+}
+
+.clearph-resize-readout {
+    position: absolute;
+    right: 28px;
+    bottom: 4px;
+    z-index: 7;
+    padding: 2px 6px;
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 1.4;
     color: #fff;
+    background: #0073aa;
+    border-radius: 3px;
+    pointer-events: none;
 }

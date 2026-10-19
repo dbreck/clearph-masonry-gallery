@@ -26,11 +26,15 @@ jQuery(document).ready(function ($) {
       this.bindOrderVisually() // Bind Order Visually modal
       this.bindLabelEditing() // Bind label editing in Layout panel + list view
       this.loadYouTubeSizingFromHidden() // Load YouTube sizing from hidden fields
+      this.bindRowHeights() // Proportional row height in the admin previews
+      this.bindResizeHandles() // Drag-to-resize corner handle on every item
     },
 
     initSortable: function () {
       $("#gallery-preview").sortable({
         items: ".gallery-item",
+        // The resize handle drags a size, not the item
+        cancel: "input,textarea,button,select,option,.clearph-resize-handle",
         placeholder: "gallery-item-placeholder",
         start: function () {
           galleryBuilder.saveCurrentOrder()
@@ -44,12 +48,12 @@ jQuery(document).ready(function ($) {
 
     bindEvents: function () {
       $("#add-images").on("click", this.openMediaUploader)
-      $("#add-youtube").on("click", this.addYouTubeVideo)
+      $("#add-video").on("click", this.addVideo)
       $("#clear-gallery").on("click", this.clearGallery)
       $(document).on("click", ".remove-item", this.removeItem)
       $(document).on("click", ".size-btn", this.updateMasonrySize)
       $(document).on("click", ".grid-apply-btn", this.applyGridSizing)
-      $(document).on("change", ".youtube-url-input", this.updateYouTubeUrl)
+      $(document).on("change", ".youtube-url-input", this.updateVideoUrl)
       $(document).on("click", ".copy-shortcode", this.copyShortcode)
 
       // Ordering controls
@@ -125,6 +129,9 @@ jQuery(document).ready(function ($) {
 
       // Add current column class
       preview.addClass("columns-" + columns)
+
+      // Bulk masonry buttons only make sense with masonry on
+      $(".clearph-masonry-bulk-actions").toggle(masonryEnabled)
 
       // Add masonry class if enabled
       if (masonryEnabled) {
@@ -506,7 +513,7 @@ jQuery(document).ready(function ($) {
 
     loadMasonrySize: function (imageId) {
       // YouTube items load from hidden field, not AJAX
-      if (String(imageId).indexOf("yt_") === 0) return
+      if (galleryBuilder.isExternalVideo(imageId)) return
 
       // Try to load grid sizing (checks gallery-scoped, then attachment meta, then legacy)
       $.post(
@@ -555,7 +562,7 @@ jQuery(document).ready(function ($) {
       const item = $(this).closest(".gallery-item")
       const itemId = String(item.data("id"))
       // Clean up YouTube data if it's a YouTube item
-      if (itemId.indexOf("yt_") === 0) {
+      if (galleryBuilder.isExternalVideo(itemId)) {
         galleryBuilder.removeYouTubeData(itemId)
       }
       item.remove()
@@ -571,7 +578,7 @@ jQuery(document).ready(function ($) {
       const size = btn.data("size")
 
       // YouTube items: save to hidden field, no AJAX
-      if (imageId.indexOf("yt_") === 0) {
+      if (galleryBuilder.isExternalVideo(imageId)) {
         item.removeClass("size-regular size-tall size-wide size-large size-xl")
         item.addClass("size-" + size)
         item.find(".size-btn").removeClass("active")
@@ -636,7 +643,7 @@ jQuery(document).ready(function ($) {
       }
 
       // YouTube items: save to hidden field, no AJAX
-      if (imageId.indexOf("yt_") === 0) {
+      if (galleryBuilder.isExternalVideo(imageId)) {
         item.css({
           "grid-column": "span " + columnSpan,
           "grid-row": "span " + rowSpan,
@@ -963,7 +970,7 @@ jQuery(document).ready(function ($) {
         const type = $item.data("type")
         // Only images and videos have this control (not YouTube items)
         if (!imageId || (type !== "image" && type !== "video")) return
-        if (typeof imageId === "string" && imageId.indexOf("yt_") === 0) return
+        if (typeof imageId === "string" && galleryBuilder.isExternalVideo(imageId)) return
 
         $.post(
           clearph_admin.ajax_url,
@@ -987,7 +994,7 @@ jQuery(document).ready(function ($) {
         const imageId = $item.data("id")
         const position = $(this).val()
 
-        if (!imageId || (typeof imageId === "string" && imageId.indexOf("yt_") === 0)) return
+        if (!imageId || (typeof imageId === "string" && galleryBuilder.isExternalVideo(imageId))) return
 
         $.post(
           clearph_admin.ajax_url,
@@ -1043,9 +1050,15 @@ jQuery(document).ready(function ($) {
         $("#clearph-layout-width-value").text(pct + "%")
       })
 
-      // Bulk layout buttons (Layout mode only)
-      $("#clearph-randomize-layout").on("click", () => this.randomizeLayout())
-      $("#clearph-smart-layout").on("click", () => this.smartLayout())
+      // Bulk layout buttons (main builder bar + Layout mode toolbar)
+      $(document).on("click", ".clearph-auto-masonry", (e) => {
+        e.preventDefault()
+        this.ratioLayout("auto")
+      })
+      $(document).on("click", ".clearph-shuffle-masonry", (e) => {
+        e.preventDefault()
+        this.ratioLayout("shuffle")
+      })
 
       // Mode switch tabs
       $(document).on("click", ".clearph-mode-btn", (e) => {
@@ -1076,7 +1089,7 @@ jQuery(document).ready(function ($) {
         this.saveCurrentOrder()
 
         // Clean up YouTube-specific data if applicable
-        if (id.indexOf("yt_") === 0) {
+        if (galleryBuilder.isExternalVideo(id)) {
           this.removeYouTubeData(id)
         }
 
@@ -1281,8 +1294,8 @@ jQuery(document).ready(function ($) {
 
         if (type === "video") {
           $tile.append('<span class="clearph-order-tile__badge clearph-order-tile__badge--video">Video</span>')
-        } else if (type === "youtube") {
-          $tile.append('<span class="clearph-order-tile__badge clearph-order-tile__badge--youtube">YT</span>')
+        } else if (galleryBuilder.isExternalType(type)) {
+          $tile.append('<span class="clearph-order-tile__badge clearph-order-tile__badge--youtube">' + (type === "vimeo" ? "Vimeo" : "YT") + "</span>")
         }
 
         $grid.append($tile)
@@ -1398,6 +1411,7 @@ jQuery(document).ready(function ($) {
       const columns = parseInt($("#columns").val(), 10) || 4
       const microCols = columns * 2
       document.documentElement.style.setProperty("--clearph-layout-micro-cols", microCols)
+      this.syncRowHeights()
 
       $("#gallery-preview .gallery-item").each(function () {
         const $source = $(this)
@@ -1436,8 +1450,8 @@ jQuery(document).ready(function ($) {
 
         if (type === "video") {
           $tile.append('<span class="clearph-layout-tile__badge clearph-layout-tile__badge--video">Video</span>')
-        } else if (type === "youtube") {
-          $tile.append('<span class="clearph-layout-tile__badge clearph-layout-tile__badge--youtube">YT</span>')
+        } else if (galleryBuilder.isExternalType(type)) {
+          $tile.append('<span class="clearph-layout-tile__badge clearph-layout-tile__badge--youtube">' + (type === "vimeo" ? "Vimeo" : "YT") + "</span>")
         }
 
         $grid.append($tile)
@@ -1537,7 +1551,7 @@ jQuery(document).ready(function ($) {
       // Toggle section visibility by type
       $(".clearph-layout-panel__section--category").toggle(type === "image")
       $(".clearph-layout-panel__section--video").toggle(type === "video")
-      $(".clearph-layout-panel__section--youtube").toggle(type === "youtube")
+      $(".clearph-layout-panel__section--youtube").toggle(this.isExternalType(type))
     },
 
     syncPanelInputsFromSource: function (id) {
@@ -1772,57 +1786,140 @@ jQuery(document).ready(function ($) {
       return /youtube\.com\/shorts\//.test(url)
     },
 
-    addYouTubeVideo: function (e) {
-      e.preventDefault()
-      var url = prompt("Enter a YouTube video URL:")
-      if (!url) return
+    // External videos are "yt_<id>" (YouTube) or "vm_<id>" (Vimeo) items. Both
+    // keep their data in the #youtube_items / #youtube_sizing hidden fields.
+    isExternalVideo: function (id) {
+      return /^(yt|vm)_/.test(String(id))
+    },
 
-      var videoId = galleryBuilder.extractYouTubeId(url)
-      if (!videoId) {
-        alert("Could not parse a YouTube video ID from that URL. Supported formats: youtube.com/watch?v=, youtu.be/, youtube.com/shorts/, youtube.com/embed/")
-        return
+    isExternalType: function (type) {
+      return type === "youtube" || type === "vimeo"
+    },
+
+    extractVimeoVideo: function (url) {
+      var m = String(url).match(/vimeo\.com\/(?:[^?#]*\/)?(\d+)(?:\/([a-f0-9]+))?(?:[\/?#]|$)/i)
+      if (!m) return null
+      var hash = m[2] || ""
+      if (!hash) {
+        var h = String(url).match(/[?&]h=([a-f0-9]+)/i)
+        if (h) hash = h[1]
+      }
+      return { id: m[1], hash: hash.toLowerCase() }
+    },
+
+    /**
+     * Turn a YouTube or Vimeo URL into an external-video record. Vimeo needs a
+     * server round trip (oEmbed) for its thumbnail and real dimensions.
+     * @returns {Promise} resolves { itemId, type, label, thumb, tall, meta }, rejects with a message
+     */
+    resolveVideoUrl: function (url) {
+      var d = $.Deferred()
+      var ytId = this.extractYouTubeId(url)
+      if (ytId) {
+        var isShort = this.isYouTubeShort(url)
+        return d
+          .resolve({
+            itemId: "yt_" + ytId,
+            type: "youtube",
+            label: "YouTube: " + ytId,
+            thumb: "https://img.youtube.com/vi/" + ytId + "/hqdefault.jpg",
+            tall: isShort,
+            meta: { video_id: ytId, url: url, is_short: isShort },
+          })
+          .promise()
       }
 
-      var ytId = "yt_" + videoId
+      if (!this.extractVimeoVideo(url)) {
+        return d
+          .reject(
+            "Couldn't read a YouTube or Vimeo video from that URL. Supported formats: youtube.com/watch?v=, youtu.be/, youtube.com/shorts/, youtube.com/embed/, vimeo.com/ID, vimeo.com/ID/HASH (unlisted), player.vimeo.com/video/ID"
+          )
+          .promise()
+      }
+
+      $.post(clearph_admin.ajax_url, { action: "clearph_vimeo_lookup", nonce: clearph_admin.nonce, url: url })
+        .done(function (response) {
+          if (!response.success) {
+            d.reject(response.data || "Vimeo lookup failed.")
+            return
+          }
+          var v = response.data
+          d.resolve({
+            itemId: "vm_" + v.video_id,
+            type: "vimeo",
+            label: "Vimeo: " + v.video_id,
+            thumb: v.thumb,
+            tall: v.height > v.width,
+            meta: {
+              provider: "vimeo",
+              video_id: v.video_id,
+              hash: v.hash,
+              url: url,
+              is_short: false,
+              thumb: v.thumb,
+              width: v.width,
+              height: v.height,
+              title: v.title,
+            },
+          })
+        })
+        .fail(function () {
+          d.reject("Couldn't reach the server to look up that Vimeo video.")
+        })
+      return d.promise()
+    },
+
+    addVideo: function (e) {
+      e.preventDefault()
+      var url = prompt("Enter a YouTube or Vimeo video URL:")
+      if (!url) return
+
+      var $btn = $("#add-video").prop("disabled", true)
+      galleryBuilder
+        .resolveVideoUrl(url.trim())
+        .done(function (video) {
+          galleryBuilder.insertVideoItem(video)
+        })
+        .fail(function (message) {
+          alert(message)
+        })
+        .always(function () {
+          $btn.prop("disabled", false)
+        })
+    },
+
+    insertVideoItem: function (video) {
       var preview = $("#gallery-preview")
 
       // Skip if already in gallery
-      if (preview.find('[data-id="' + ytId + '"]').length) {
-        alert("This YouTube video is already in the gallery.")
+      if (preview.find('[data-id="' + video.itemId + '"]').length) {
+        alert("This video is already in the gallery.")
         return
       }
 
       galleryBuilder.saveCurrentOrder()
 
-      var isShort = galleryBuilder.isYouTubeShort(url)
-      var defaultSize = isShort ? "tall" : "regular"
-      var sizeMap = {
-        regular: { column: 2, row: 2 },
-        tall: { column: 2, row: 4 },
-      }
-      var defaultSizing = sizeMap[defaultSize] || sizeMap.regular
+      var defaultSize = video.tall ? "tall" : "regular"
+      var defaultSizing = video.tall ? { column: 2, row: 4 } : { column: 2, row: 2 }
 
       var template = wp.template("youtube-item")
-      var itemData = {
-        yt_id: ytId,
-        video_id: videoId,
-        url: url,
-        thumb: "https://img.youtube.com/vi/" + videoId + "/hqdefault.jpg",
-        masonry_size: defaultSize,
-        column_span: defaultSizing.column,
-        row_span: defaultSizing.row,
-      }
+      preview.append(
+        template({
+          yt_id: video.itemId,
+          type: video.type,
+          label: video.label,
+          video_id: video.meta.video_id,
+          url: video.meta.url,
+          thumb: video.thumb,
+          masonry_size: defaultSize,
+          column_span: defaultSizing.column,
+          row_span: defaultSizing.row,
+        })
+      )
 
-      var itemHtml = template(itemData)
-      preview.append(itemHtml)
-
-      // Store YouTube data in hidden fields
-      galleryBuilder.updateYouTubeData(ytId, {
-        video_id: videoId,
-        url: url,
-        is_short: isShort,
-      })
-      galleryBuilder.updateYouTubeSizing(ytId, {
+      // Store video data in hidden fields
+      galleryBuilder.updateYouTubeData(video.itemId, video.meta)
+      galleryBuilder.updateYouTubeSizing(video.itemId, {
         column_span: defaultSizing.column,
         row_span: defaultSizing.row,
         masonry_size: defaultSize,
@@ -1880,122 +1977,314 @@ jQuery(document).ready(function ($) {
       })
     },
 
-    updateYouTubeUrl: function () {
+    updateVideoUrl: function () {
       var $input = $(this)
       var item = $input.closest(".gallery-item")
       var oldId = String(item.data("id"))
+      var oldUrl = (galleryBuilder.getYouTubeItems()[oldId] || {}).url || ""
       var newUrl = $input.val().trim()
 
-      if (!newUrl) return
+      if (!newUrl || newUrl === oldUrl) return
 
-      var newVideoId = galleryBuilder.extractYouTubeId(newUrl)
-      if (!newVideoId) {
-        alert("Could not parse a YouTube video ID from that URL.")
-        $input.val(item.find(".image-filename").text().replace("YouTube: ", ""))
-        return
-      }
+      galleryBuilder
+        .resolveVideoUrl(newUrl)
+        .done(function (video) {
+          var newId = video.itemId
+          if (newId !== oldId && $('#gallery-preview .gallery-item[data-id="' + newId + '"]').length) {
+            alert("That video is already in the gallery.")
+            $input.val(oldUrl)
+            return
+          }
 
-      var newYtId = "yt_" + newVideoId
-      var isShort = galleryBuilder.isYouTubeShort(newUrl)
+          item.find(".image-container img").attr("src", video.thumb)
+          item.find(".image-filename").text(video.label)
+          item.attr("data-type", video.type).data("type", video.type)
 
-      // Update thumbnail
-      item.find(".image-container img").attr("src", "https://img.youtube.com/vi/" + newVideoId + "/hqdefault.jpg")
-      item.find(".image-filename").text("YouTube: " + newVideoId)
+          // If the video changed, move its sizing to the new ID
+          if (newId !== oldId) {
+            var sizeClass = (item.attr("class") || "").match(/size-(regular|tall|wide|large|xl)/)
+            var sizing = {
+              column_span: parseInt(item.find(".grid-column-input").val()) || 2,
+              row_span: parseInt(item.find(".grid-row-input").val()) || 2,
+              masonry_size: sizeClass ? sizeClass[1] : "regular",
+            }
+            galleryBuilder.removeYouTubeData(oldId)
+            item.attr("data-id", newId).data("id", newId)
+            galleryBuilder.updateYouTubeSizing(newId, sizing)
+          }
 
-      // If video ID changed, update data-id and hidden fields
-      if (newYtId !== oldId) {
-        // Remove old data
-        galleryBuilder.removeYouTubeData(oldId)
+          galleryBuilder.updateYouTubeData(newId, video.meta)
+          galleryBuilder.updateImageOrder()
+        })
+        .fail(function (message) {
+          alert(message)
+          $input.val(oldUrl)
+        })
+    },
 
-        // Update DOM
-        item.attr("data-id", newYtId).data("id", newYtId)
+    // ===== Drag-to-resize handle =====
 
-        // Preserve existing sizing
-        var columnSpan = parseInt(item.find(".grid-column-input").val()) || 2
-        var rowSpan = parseInt(item.find(".grid-row-input").val()) || 2
-        var sizeClass = (item.attr("class") || "").match(/size-(regular|tall|wide|large|xl)/)
-        var masonrySize = sizeClass ? sizeClass[1] : "regular"
-
-        galleryBuilder.updateYouTubeSizing(newYtId, {
-          column_span: columnSpan,
-          row_span: rowSpan,
-          masonry_size: masonrySize,
+    /**
+     * Corner handle on every builder item and Layout-mode tile. Dragging snaps
+     * the cell to whole grid tracks/rows (live), and on release commits through
+     * the item's own Width/Height inputs + Apply button, so images, videos and
+     * external videos keep their existing save paths.
+     */
+    bindResizeHandles: function () {
+      const grids = $("#gallery-preview, #clearph-layout-grid")
+      const addHandles = () => {
+        grids.children(".gallery-item, .clearph-layout-tile").each(function () {
+          if (!$(this).children(".clearph-resize-handle").length) {
+            $(this).append('<span class="clearph-resize-handle" title="Drag to resize" aria-hidden="true"></span>')
+          }
         })
       }
-
-      // Update YouTube data
-      galleryBuilder.updateYouTubeData(newYtId, {
-        video_id: newVideoId,
-        url: newUrl,
-        is_short: isShort,
+      addHandles()
+      // Items are added by PHP, the media frame, video URLs and Layout re-renders
+      const observer = new MutationObserver(addHandles)
+      grids.each(function () {
+        observer.observe(this, { childList: true })
       })
 
-      // Update image order to reflect any ID change
-      galleryBuilder.updateImageOrder()
+      $(document).on("pointerdown", ".clearph-resize-handle", (e) => this.startResize(e))
+      // Don't let the click that ends a resize select / open anything
+      $(document).on("click", ".clearph-resize-handle", (e) => e.stopPropagation())
+    },
+
+    startResize: function (e) {
+      const ev = e.originalEvent
+      if (ev.button !== 0) return
+      e.preventDefault()
+      e.stopPropagation()
+
+      const handle = e.currentTarget
+      const $cell = $(handle).parent()
+      const grid = $cell.parent()[0]
+      const cs = getComputedStyle(grid)
+      const tracks = cs.gridTemplateColumns.split(" ").map(parseFloat)
+      const track = tracks[0]
+      if (!(track > 0)) return
+      const maxCols = Math.min(12, tracks.length)
+      const colGap = parseFloat(cs.columnGap) || 0
+      const rowGap = parseFloat(cs.rowGap) || 0
+      const rowH = parseFloat(cs.gridAutoRows) || track
+
+      const isTile = $cell.hasClass("clearph-layout-tile")
+      const id = String($cell.attr("data-id"))
+      const $source = isTile ? this.getSourceItem(id) : $cell
+      if (!$source.length) return
+
+      const rect = $cell[0].getBoundingClientRect()
+      const startX = ev.clientX
+      const startY = ev.clientY
+      const startCol = parseInt($source.find(".grid-column-input").val(), 10) || 2
+      const startRow = parseInt($source.find(".grid-row-input").val(), 10) || 2
+      let col = startCol
+      let row = startRow
+
+      const $readout = $('<span class="clearph-resize-readout"></span>').text(col + " × " + row).appendTo($cell)
+      $cell.addClass("is-resizing")
+      try {
+        handle.setPointerCapture(ev.pointerId) // keep receiving moves outside the handle
+      } catch (err) {}
+
+      const move = (m) => {
+        const w = rect.width + (m.clientX - startX)
+        const h = rect.height + (m.clientY - startY)
+        col = Math.max(1, Math.min(maxCols, Math.round((w + colGap) / (track + colGap))))
+        row = Math.max(1, Math.min(12, Math.round((h + rowGap) / (rowH + rowGap))))
+        $cell.css({ "grid-column": "span " + col, "grid-row": "span " + row })
+        $readout.text(col + " × " + row)
+      }
+
+      const end = () => {
+        handle.removeEventListener("pointermove", move)
+        handle.removeEventListener("pointerup", end)
+        handle.removeEventListener("pointercancel", end)
+        $cell.removeClass("is-resizing")
+        $readout.remove()
+        if (col === startCol && row === startRow) return
+
+        // Commit via the source item's own controls (AJAX / hidden JSON paths)
+        $source.find(".grid-column-input").val(col)
+        $source.find(".grid-row-input").val(row)
+        $source.find(".grid-apply-btn").first().trigger("click")
+        $source.css({ "grid-column": "span " + col, "grid-row": "span " + row })
+        if (isTile) {
+          this.refreshLayoutTile(id)
+          if (String(this.orderModalSelectedId) === id) this.syncPanelInputsFromSource(id)
+        } else {
+          $('.clearph-layout-tile[data-id="' + id + '"]').css({ "grid-column": "span " + col, "grid-row": "span " + row })
+        }
+      }
+
+      handle.addEventListener("pointermove", move)
+      handle.addEventListener("pointerup", end)
+      handle.addEventListener("pointercancel", end)
     },
 
     // ===== Bulk Layout Algorithms =====
 
+    // Reference gallery width (px) used to turn the gap and image resolution
+    // into track units. Proportional rows make cell shapes width-independent,
+    // so this only nudges the gap ratio and the "don't upscale" check.
+    LAYOUT_REF_WIDTH: 1400,
+
     /**
-     * Generate a row-packed layout that tiles perfectly (no gaps).
-     * @param {Array} items  - array of { id, ... } (one per gallery item)
-     * @param {number} microCols - total micro-columns for the gallery
-     * @param {Function} getSizes - (item, remaining, index, items) => array of { col, row, weight }
-     * @returns {Object} map of id → { column_span, row_span }
+     * Shape (width / height) of a cell spanning c micro-columns x r rows with
+     * proportional rows (row height = track width). gapRatio = gap / track width.
      */
-    generatePackedLayout: function (items, microCols, getSizes) {
-      const result = {}
-      let i = 0
-      const consecutiveR = { count: 0 }
-      let lastWasXL = false
+    cellAspect: function (c, r, gapRatio) {
+      return (c + (c - 1) * gapRatio) / (r + (r - 1) * gapRatio)
+    },
 
-      while (i < items.length) {
-        let remaining = microCols
+    // Fraction of the image object-fit: cover hides in a cell of shape cellRatio
+    cropFraction: function (imageRatio, cellRatio) {
+      return 1 - Math.min(imageRatio / cellRatio, cellRatio / imageRatio)
+    },
 
-        while (remaining > 0 && i < items.length) {
-          let candidates = getSizes(items[i], remaining, i, items)
+    /**
+     * Cost of giving an item a c x r cell. Lower is better. Crop dominates;
+     * the rest keeps sizes in a pleasant range and the layout varied.
+     */
+    layoutCost: function (item, cand, ctx) {
+      const { c, r, crop } = cand
+      // Crop dominates, and climbs steeply past ~15%
+      let cost = crop * 8 + crop * crop * 20
 
-          // Filter to sizes that fit remaining space
-          candidates = candidates.filter((c) => c.col <= remaining)
+      if (item.feature) {
+        // Features want to be big: 2+ visual columns
+        if (c < Math.min(4, ctx.microCols)) cost += 1.5
+      } else {
+        // Regular items are one visual column (2 micro-cols), so the gallery
+        // reads as the column count it's set to. 1.5 columns is an occasional
+        // accent; wider costs more again.
+        if (c > 2) cost += 1.0 + (c - 3) * 0.45
+      }
+      if (c * r > 16) cost += (c * r - 16) * 0.06 // even features shouldn't swallow the page
+      if (r > 6) cost += (r - 6) * 0.25 // towers
 
-          // Rhythm rules
-          if (lastWasXL) {
-            candidates = candidates.filter((c) => c.col < microCols)
-          }
-          if (consecutiveR.count >= 3) {
-            const nonR = candidates.filter((c) => !(c.col === 2 && c.row === 2))
-            if (nonR.length) candidates = nonR
-          }
+      // Landing flush with a neighbouring column merges flat runs, which keeps
+      // the skyline tidy (fewer narrow wells later)
+      const top = ctx.level + r
+      if (ctx.leftHeight === top || ctx.rightHeight === top) cost -= 0.4
 
-          // If nothing fits (shouldn't happen, but safety), expand previous item
-          if (!candidates.length) {
-            break
-          }
+      if (c + "x" + r === ctx.prevKey) cost += 0.25 // avoid runs of identical cells
 
-          // Weighted random pick
-          const pick = this.weightedPick(candidates)
-
-          // Track rhythm
-          if (pick.col === 2 && pick.row === 2) {
-            consecutiveR.count++
-          } else {
-            consecutiveR.count = 0
-          }
-          lastWasXL = pick.col >= microCols
-
-          result[items[i].id] = { column_span: pick.col, row_span: pick.row }
-          remaining -= pick.col
-          i++
-
-          // If remaining is too small for the minimum size (1 micro-col), expand last item
-          if (remaining > 0 && remaining < 2 && i <= items.length) {
-            const lastId = items[i - 1].id
-            result[lastId].column_span += remaining
-            remaining = 0
-          }
-        }
+      // Lookahead: the run this leaves beside it is where the next item lands,
+      // so don't leave a slot the next image can't fill without heavy cropping
+      const leftover = ctx.runWidth - c
+      if (leftover >= 2 && ctx.next) {
+        cost += this.bestCropInWidth(ctx.next.ratio, leftover, ctx.gapRatio) * 5
       }
 
+      return cost
+    },
+
+    // Least crop an image can get in a run of the given width (any valid c, r)
+    bestCropInWidth: function (ratio, width, gapRatio) {
+      let best = 1
+      for (let c = 2; c <= width; c++) {
+        if (width - c === 1) continue
+        for (let r = 1; r <= 12; r++) {
+          best = Math.min(best, this.cropFraction(ratio, this.cellAspect(c, r, gapRatio)))
+        }
+      }
+      return best
+    },
+
+    /**
+     * Skyline packing. Items go in order, each onto the lowest, leftmost flat
+     * run of the skyline, never wider than that run and never stranding a
+     * 1-micro-col sliver. That is exactly where CSS grid auto-placement puts
+     * them, and it never leaves a hole, so the page renders as planned.
+     *
+     * @param {Array} items - [{ id, ratio, width }]
+     * @param {Object} opts - { microCols, gapRatio, trackPx, shuffle }
+     * @returns {Object} id → { column_span, row_span }
+     */
+    packLayout: function (items, opts) {
+      const M = opts.microCols
+      const heights = new Array(M).fill(0)
+      const placed = []
+      let prevKey = ""
+      let sinceFeature = 99
+
+      items.forEach((item, index) => {
+        const level = Math.min(...heights)
+        const start = heights.indexOf(level)
+        let runWidth = 0
+        while (start + runWidth < M && heights[start + runWidth] === level) runWidth++
+
+        // Feature (hero) slots: a big cell every so often, only for images with
+        // enough resolution to fill it
+        const bigEnough = !item.width || item.width >= 1600
+        const roomy = runWidth >= Math.min(4, M) && M >= 6
+        if (opts.shuffle) {
+          item.feature = roomy && bigEnough && sinceFeature >= 4 && Math.random() < 0.3
+        } else {
+          item.feature = roomy && bigEnough && runWidth === M && (index === 0 || sinceFeature >= 6)
+        }
+
+        const ctx = {
+          microCols: M,
+          gapRatio: opts.gapRatio,
+          runWidth: runWidth,
+          next: items[index + 1],
+          level: level,
+          leftHeight: start > 0 ? heights[start - 1] : null,
+          rightHeight: start + runWidth < M ? heights[start + runWidth] : null,
+          prevKey: prevKey,
+        }
+
+        const candidates = []
+        for (let c = 2; c <= runWidth; c++) {
+          if (runWidth - c === 1) continue
+          // Don't stretch an image much past its own pixel width
+          const cellPx = c * opts.trackPx + (c - 1) * opts.gapPx
+          if (item.width && cellPx > item.width * 1.15 && c > 2) continue
+          for (let r = 1; r <= 12; r++) {
+            const crop = this.cropFraction(item.ratio, this.cellAspect(c, r, opts.gapRatio))
+            const cand = { c: c, r: r, crop: crop }
+            cand.cost = this.layoutCost(item, cand, ctx)
+            candidates.push(cand)
+          }
+        }
+
+        const best = candidates.reduce((a, b) => (b.cost < a.cost ? b : a))
+        let pick = best
+        if (opts.shuffle) {
+          // Sample among near-best options, favouring the better ones
+          const pool = candidates.filter((cand) => cand.cost <= best.cost + 1.2 && cand.crop <= Math.max(0.22, best.crop))
+          pick = this.weightedPick(pool.map((cand) => Object.assign({}, cand, { weight: Math.exp(-(cand.cost - best.cost) * 2) })))
+        }
+
+        for (let k = start; k < start + pick.c; k++) heights[k] = level + pick.r
+        placed.push({ id: item.id, ratio: item.ratio, start: start, c: pick.c, r: pick.r, top: level })
+        prevKey = pick.c + "x" + pick.r
+        sinceFeature = item.feature && pick.c >= 4 ? 0 : sinceFeature + 1
+      })
+
+      // Even out the bottom edge: stretch the topmost item of each column run
+      // down to the deepest column when that doesn't crop it badly
+      const maxH = Math.max(...heights)
+      placed.forEach((p) => {
+        const bottom = p.top + p.r
+        if (bottom >= maxH) return
+        for (let k = p.start; k < p.start + p.c; k++) {
+          if (heights[k] !== bottom) return
+        }
+        const r = maxH - p.top
+        if (r > 12) return
+        if (this.cropFraction(p.ratio, this.cellAspect(p.c, r, opts.gapRatio)) > 0.3) return
+        p.r = r
+        for (let k = p.start; k < p.start + p.c; k++) heights[k] = maxH
+      })
+
+      const result = {}
+      placed.forEach((p) => {
+        result[p.id] = { column_span: p.c, row_span: p.r }
+      })
       return result
     },
 
@@ -2009,90 +2298,51 @@ jQuery(document).ready(function ($) {
       return candidates[candidates.length - 1]
     },
 
-    /**
-     * Randomize Layout — weighted random sizes with row-packing.
-     */
-    randomizeLayout: function () {
-      const $items = $("#gallery-preview .gallery-item")
-      if (!$items.length) return
-      if (!confirm("This will resize all items in the gallery. Continue?")) return
+    // Bulk layouts overwrite every item's sizing; ask once per page load
+    bulkLayoutConfirmed: false,
 
-      const columns = parseInt($("#columns").val(), 10) || 4
-      const microCols = columns * 2
-      const itemCount = $items.length
-
-      // Build item list
-      const items = []
-      $items.each(function () {
-        items.push({ id: String($(this).data("id")) })
-      })
-
-      // Size pool — weights adjusted by gallery size
-      const getSizes = (item, remaining, index) => {
-        const pool = []
-
-        // R (2x2) — always available, workhorse
-        pool.push({ col: 2, row: 2, weight: 40 })
-
-        // T (2x4) — vertical accent
-        pool.push({ col: 2, row: 4, weight: 15 })
-
-        // W (4x2) — horizontal accent (only if grid is wide enough)
-        if (microCols >= 4) {
-          pool.push({ col: 4, row: 2, weight: 15 })
-        }
-
-        // L (4x4) — hero anchor
-        if (microCols >= 4) {
-          pool.push({ col: 4, row: 4, weight: itemCount <= 8 ? 15 : 10 })
-        }
-
-        // XL (full width x 6) — dramatic, rare
-        if (microCols > 4 && itemCount >= 10) {
-          pool.push({ col: microCols, row: 6, weight: 3 })
-        }
-
-        // Boost non-R for the first row to create a visual hook
-        if (index === 0) {
-          pool.forEach((p) => {
-            if (!(p.col === 2 && p.row === 2)) p.weight *= 2
-          })
-        }
-
-        return pool
-      }
-
-      const sizingMap = this.generatePackedLayout(items, microCols, getSizes)
-      this.applyBulkSizing(sizingMap)
+    confirmBulkLayout: function () {
+      if (this.bulkLayoutConfirmed) return true
+      if (!confirm("This will resize every item in the gallery based on image proportions. Continue?")) return false
+      this.bulkLayoutConfirmed = true
+      return true
     },
 
     /**
-     * Smart Layout — fetch image aspect ratios, assign best-fit sizes.
+     * Ratio-based layout — fetch image dimensions, then skyline-pack cells
+     * shaped to each image (proportional rows).
+     * @param {string} mode - "auto" (lowest-cost fit, same result every time) |
+     *                        "shuffle" (samples near-best fits, new arrangement each click)
      */
-    smartLayout: function () {
+    ratioLayout: function (mode) {
       const $items = $("#gallery-preview .gallery-item")
       if (!$items.length) return
-      if (!confirm("This will resize all items based on image proportions. Continue?")) return
+      if (!this.confirmBulkLayout()) return
+      const shuffle = mode === "shuffle"
 
       const columns = parseInt($("#columns").val(), 10) || 4
       const microCols = columns * 2
+      const margin = String($("#column_margin").val() || "").trim()
+      const gapPx = /^\d+(\.\d+)?(px)?$/.test(margin) ? parseFloat(margin) : 20
+      const trackPx = (this.LAYOUT_REF_WIDTH - (microCols - 1) * gapPx) / microCols
 
-      // Collect attachment IDs (skip YouTube items — handled separately)
+      // Collect attachment IDs (YouTube items carry their own shape)
       const items = []
       const imageIds = []
       $items.each(function () {
         const id = String($(this).data("id"))
-        items.push({ id: id, type: $(this).data("type") || "image" })
-        if (id.indexOf("yt_") !== 0) {
+        items.push({ id: id })
+        if (!galleryBuilder.isExternalVideo(id)) {
           imageIds.push(id)
         }
       })
 
       // Show loading state
-      const $grid = $("#clearph-layout-grid")
+      const $grid = $("#clearph-layout-grid, #gallery-preview")
+      const $buttons = $(".clearph-auto-masonry, .clearph-shuffle-masonry")
       $grid.css("opacity", "0.5")
+      $buttons.prop("disabled", true)
 
-      // Fetch metadata for images
       const fetchMetadata = imageIds.length
         ? $.post(clearph_admin.ajax_url, {
             action: "clearph_get_images_metadata",
@@ -2104,133 +2354,92 @@ jQuery(document).ready(function ($) {
       fetchMetadata
         .done((response) => {
           const meta = response.success ? response.data : {}
-
-          // Classify YouTube items using stored data
           const ytItems = this.getYouTubeItems()
 
-          // Assign aspect ratio info to each item
           items.forEach((item) => {
-            if (item.id.indexOf("yt_") === 0) {
-              // YouTube: check is_short flag
-              const ytData = ytItems[item.id]
-              item.ratio = ytData && ytData.is_short ? 0.5625 : 1.778 // 9:16 or 16:9
+            if (galleryBuilder.isExternalVideo(item.id)) {
+              const ytData = ytItems[item.id] || {}
+              if (ytData.width && ytData.height) {
+                item.ratio = ytData.width / ytData.height // Vimeo: real size from oEmbed
+              } else {
+                item.ratio = ytData.is_short ? 0.5625 : 1.778 // YouTube: 9:16 or 16:9
+              }
+              item.width = 1920
             } else if (meta[item.id]) {
               item.ratio = meta[item.id].aspect_ratio
-              item.resolution = meta[item.id].width * meta[item.id].height
+              item.width = meta[item.id].width
             } else {
               item.ratio = 1.0 // Unknown, treat as square
             }
           })
 
-          // Find hero image (highest resolution)
-          let heroId = null
-          let maxRes = 0
-          items.forEach((item) => {
-            if (item.resolution && item.resolution > maxRes) {
-              maxRes = item.resolution
-              heroId = item.id
-            }
+          const sizingMap = this.packLayout(items, {
+            microCols: microCols,
+            gapPx: gapPx,
+            trackPx: trackPx,
+            gapRatio: gapPx / trackPx,
+            shuffle: shuffle,
           })
-
-          // Count distribution for variety injection
-          const buckets = { wide: 0, landscape: 0, square: 0, portrait: 0, tall: 0 }
-          items.forEach((item) => {
-            const b = this.classifyAspectRatio(item.ratio)
-            buckets[b]++
-          })
-          const dominant = Object.keys(buckets).reduce((a, b) => (buckets[a] >= buckets[b] ? a : b))
-          const isUniform = buckets[dominant] / items.length > 0.6
-
-          const getSizes = (item, remaining, index) => {
-            const classification = this.classifyAspectRatio(item.ratio)
-            const pool = []
-
-            // Hero boost: first item or hero image gets a large size
-            if (item.id === heroId && index < 3 && microCols >= 4) {
-              pool.push({ col: 4, row: 4, weight: 50 })
-              if (microCols > 4 && items.length >= 10) {
-                pool.push({ col: microCols, row: 6, weight: 20 })
-              }
-            }
-
-            // Best-fit sizes based on aspect ratio
-            switch (classification) {
-              case "wide":
-                if (microCols >= 6) pool.push({ col: 6, row: 2, weight: 30 })
-                if (microCols >= 4) pool.push({ col: 4, row: 2, weight: 40 })
-                pool.push({ col: 2, row: 2, weight: 5 })
-                break
-              case "landscape":
-                if (microCols >= 4) pool.push({ col: 4, row: 2, weight: 35 })
-                pool.push({ col: 2, row: 2, weight: 20 })
-                if (microCols >= 4) pool.push({ col: 4, row: 3, weight: 10 })
-                break
-              case "square":
-                pool.push({ col: 2, row: 2, weight: 35 })
-                if (microCols >= 4) pool.push({ col: 4, row: 4, weight: 15 })
-                pool.push({ col: 2, row: 3, weight: 10 })
-                break
-              case "portrait":
-                pool.push({ col: 2, row: 4, weight: 35 })
-                pool.push({ col: 2, row: 3, weight: 20 })
-                pool.push({ col: 2, row: 2, weight: 5 })
-                break
-              case "tall":
-                pool.push({ col: 2, row: 4, weight: 40 })
-                pool.push({ col: 2, row: 6, weight: 15 })
-                pool.push({ col: 2, row: 3, weight: 10 })
-                break
-            }
-
-            // Variety injection for uniform galleries
-            if (isUniform && classification === dominant) {
-              // Add some contrasting sizes
-              if (classification !== "portrait" && classification !== "tall") {
-                pool.push({ col: 2, row: 4, weight: 12 })
-              }
-              if (classification !== "wide" && classification !== "landscape" && microCols >= 4) {
-                pool.push({ col: 4, row: 2, weight: 12 })
-              }
-            }
-
-            // Ensure at least one option
-            if (!pool.length) {
-              pool.push({ col: 2, row: 2, weight: 1 })
-            }
-
-            return pool
-          }
-
-          const sizingMap = this.generatePackedLayout(items, microCols, getSizes)
-          this.applyBulkSizing(sizingMap)
+          this.applyBulkSizing(sizingMap, { rowHeight: "proportional" })
         })
         .fail(() => {
           alert("Failed to fetch image metadata. Please try again.")
         })
         .always(() => {
           $grid.css("opacity", "")
+          $buttons.prop("disabled", false)
         })
     },
 
-    classifyAspectRatio: function (ratio) {
-      if (ratio >= 2.0) return "wide"
-      if (ratio >= 1.3) return "landscape"
-      if (ratio >= 0.8) return "square"
-      if (ratio >= 0.5) return "portrait"
-      return "tall"
+    /**
+     * Proportional rows in the admin previews, mirroring the frontend: each
+     * row is as tall as one track is wide. Fixed mode clears the override so
+     * the stylesheet row height applies.
+     */
+    syncRowHeights: function () {
+      const proportional = $("#row_height").val() === "proportional" && $("#masonry_enabled").is(":checked")
+      $("#gallery-preview, #clearph-layout-grid").each(function () {
+        if (!proportional) {
+          this.style.gridAutoRows = ""
+          return
+        }
+        const track = parseFloat(getComputedStyle(this).gridTemplateColumns)
+        if (track > 0) this.style.gridAutoRows = track + "px"
+      })
+    },
+
+    bindRowHeights: function () {
+      const sync = () => this.syncRowHeights()
+      $("#row_height, #columns, #masonry_enabled").on("change", () => setTimeout(sync, 0))
+      if ("ResizeObserver" in window) {
+        const observer = new ResizeObserver(sync)
+        $("#gallery-preview, #clearph-layout-grid").each(function () {
+          observer.observe(this)
+        })
+      } else {
+        $(window).on("resize", sync)
+      }
+      sync()
     },
 
     /**
      * Apply a sizing map to all gallery items (batch update).
      * @param {Object} sizingMap - { id: { column_span, row_span }, ... }
+     * @param {Object} [opts] - { rowHeight: "proportional" } also switches the
+     *                          gallery's row height (saved with the sizes)
      */
-    applyBulkSizing: function (sizingMap) {
+    applyBulkSizing: function (sizingMap, opts) {
+      opts = opts || {}
+      if (opts.rowHeight) {
+        $("#row_height").val(opts.rowHeight)
+        this.syncRowHeights()
+      }
       const imageSizing = {}
       const ytSizing = {}
 
       // Split by type
       Object.keys(sizingMap).forEach((id) => {
-        if (id.indexOf("yt_") === 0) {
+        if (galleryBuilder.isExternalVideo(id)) {
           ytSizing[id] = sizingMap[id]
         } else {
           imageSizing[id] = sizingMap[id]
@@ -2283,6 +2492,7 @@ jQuery(document).ready(function ($) {
           nonce: clearph_admin.nonce,
           post_id: clearph_admin.post_id,
           sizing: JSON.stringify(imageSizing),
+          row_height: opts.rowHeight || "",
         })
       }
 

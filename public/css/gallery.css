@@ -492,6 +492,51 @@
     pointer-events: none !important;
 }
 
+/* ===== Lightbox "Resize to Next Image" transition ===== */
+/* The image box animates through other shapes on its way to the next image's
+   aspect ratio; cover keeps the picture undistorted mid-flight (at rest the
+   box matches the image exactly, so nothing is cropped). */
+.clearph-fancybox-resize .fancybox-slide--image .fancybox-image {
+    object-fit: cover;
+}
+
+.clearph-fancybox-resize .fancybox-content.clearph-is-resizing,
+.clearph-fancybox-ghost {
+    transition-property: transform, width, height, opacity;
+    transition-timing-function: cubic-bezier(.5, 0, .14, 1);
+}
+
+/* Copy of the previous image, fading out over the new one as both resize */
+.clearph-fancybox-ghost {
+    position: absolute;
+    top: 0;
+    left: 0;
+    object-fit: cover;
+    pointer-events: none;
+    transform-origin: top left;
+    z-index: 99996;
+}
+
+/* Tablet spans: at 481-768px galleries drop to 4 tracks, so items carry
+   tablet-safe spans (set inline by class-frontend.php grid_span_style()).
+   !important beats the desktop inline spans. Skipped while a category filter
+   is active, which applies its own uniform spans. */
+@media (min-width: 481px) and (max-width: 768px) {
+    .clearph-gallery.masonry-enabled:not(.is-filtered) .gallery-item[style*="--clearph-tablet-col"] {
+        grid-column: var(--clearph-tablet-col) !important;
+        grid-row: var(--clearph-tablet-row) !important;
+    }
+}
+
+/* Phones, proportional galleries: best-fit row count per item instead of the
+   one-row-for-everything rule above (rows are track-width tall here, so a
+   single row would crop portraits hard). */
+@media (max-width: 480px) {
+    .clearph-gallery.masonry-enabled[data-row-height="proportional"]:not(.is-filtered) .gallery-item[style*="--clearph-phone-row"] {
+        grid-row: var(--clearph-phone-row) !important;
+    }
+}
+
 /* Print styles */
 @media print {
     .clearph-gallery {

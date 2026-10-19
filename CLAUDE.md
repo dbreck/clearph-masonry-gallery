@@ -324,34 +324,52 @@ Setting `lightbox_caption_hide` (Image Labels → Label Visibility). The FancyBo
 - Placement: 9 positions via `position: absolute` with 40px top/bottom, 20px left/right offsets
 - **Specificity fix**: all position rules scoped under `.clearph-gallery` with explicit reset of opposing properties (`top: auto`, `left: auto`, etc.) so extra CSS classes from themes don't override
 
-## Auto-Layout Bulk Actions (v1.6.0)
+### Lightbox Transition (v2.2.0)
+Setting `lightbox_transition` (General settings, below Hide Download Button; also a WPBakery Lightbox-tab dropdown / shortcode attr): `slide` (default, prior behavior), `fade`, `resize`. Emitted as `data-lightbox-transition`; the click handler in `class-frontend.php` `add_lightbox_javascript()` maps slide/fade straight to FancyBox `transitionEffect`.
+- **`resize`** ("Resize to Next Image") is custom: `transitionEffect: false` + `baseClass` `clearph-fancybox-resize` + `beforeShow`/`afterShow` callbacks. `clearphResizeCapture` (beforeShow, fires while the previous slide is still laid out) records the previous image's box + src; `clearphResizeRun` (afterShow, new slide already placed at `getFitPos`) snaps the new content back to the old box at opacity 0, then animates it to its fit pos while a ghost `<img class="clearph-fancybox-ghost">` of the previous image resizes along and fades out.
+- CSS (`gallery.css`) adds width/height to the content's transition properties only while `.clearph-is-resizing` is on, and `object-fit: cover` on `.fancybox-image` so the picture isn't stretched mid-flight.
+- Skipped (FancyBox behaves as `transitionEffect: false`) when either slide isn't an image (video/YouTube) or the user swiped (`instance.isMoved(previous)`), so touch swipes still slide. A `setTimeout` cleanup covers FancyBox `stop()`ping the content on window resize mid-animation.
 
-Two bulk layout tools in the Gallery Editor modal's **Layout mode** toolbar (class-gallery-post-type.php `.clearph-layout-bulk-actions`):
+## Auto-Layout Bulk Actions (v1.6.0, rewritten v2.2.0)
 
-### Randomize Layout
-- Weighted random size picker with **row-packing algorithm** that guarantees each conceptual row's column spans sum to exactly `microCols` → zero CSS grid gaps
-- Weights: R(40) T(15) W(15) L(10) XL(3). XL weight=0 for galleries <10 items or 2-col layouts
-- Rhythm rules: no consecutive XLs, max 3 consecutive Rs, first row boosts non-R weights for visual hook
-- Entirely client-side, no server data needed
+Two buttons, **Auto Masonry** and **Shuffle Masonry**, appear in BOTH the main builder bar (`.clearph-masonry-bulk-actions`, hidden when Enable Masonry is unchecked) and the Gallery Editor modal's Layout toolbar. Bound by class (`.clearph-auto-masonry` / `.clearph-shuffle-masonry`), both call `ratioLayout(mode)`. Confirm prompt shows once per page load (`confirmBulkLayout()`).
 
-### Smart Layout (Phase 1 — aspect-ratio based)
-- Fetches image dimensions via `clearph_get_images_metadata` AJAX (returns `{width, height, aspect_ratio}` from `wp_get_attachment_metadata()`)
-- Classifies each image: ultra-wide (≥2.0), landscape (1.3-2.0), square (0.8-1.3), portrait (0.5-0.8), ultra-tall (<0.5)
-- Assigns best-fit sizes from per-classification pools (landscapes → W, portraits → T, etc.)
-- **Hero detection**: highest-resolution image gets L/XL boost and position 1-3 placement
-- **Variety injection**: if >60% of gallery is one aspect-ratio type, inject contrasting sizes to break monotony
-- YouTube items use stored `is_short` flag (Shorts → T, standard → W) — no metadata AJAX needed
-- Phase 2 (future): AI vision API for content-aware sizing
+### Why proportional rows are required
+With the old fixed 175px rows a cell's shape depends on the gallery's width (a full-width 3-col gallery at 1555px has 247px tracks, so "Wide" 4x2 = 2.83:1 and "Regular" 2x2 = 1.39:1; at 1200px they're ~2.2 and ~1.07). No layout can fit images at every width that way. So Auto/Shuffle always switch the gallery to **Row Height: Proportional** (see below), where a c x r cell's shape is `(c + (c-1)g) / (r + (r-1)g)` (g = gap / track width) at every width.
 
-### Core: `generatePackedLayout(items, microCols, getSizes)`
-Shared by both features. Takes a `getSizes(item, remaining, index, items)` callback that returns candidate size pool. Handles rhythm tracking, remaining-space filtering, and last-item expansion to fill odd remainders.
+### `ratioLayout("auto" | "shuffle")` → `packLayout(items, opts)`
+- Fetches dimensions via `clearph_get_images_metadata` (YouTube: 16:9, or 9:16 for Shorts, from `is_short`)
+- **Skyline packing**: each item, in order, goes on the lowest, leftmost flat run of the column skyline, never wider than that run and never leaving a 1-micro-col sliver. This is exactly where CSS grid auto-placement puts it and never leaves holes (dense flow never reorders), so the page renders as planned. Bottom edge is evened out by stretching top items when that crops ≤ 30%.
+- Every (c, r) that fits the run is scored by `layoutCost()`: crop (`cropFraction` under `object-fit: cover`, weighted `8c + 20c²`), size (regular items are **1 visual column** (c = 2); c ≥ 3 costs `1.0 + (c-3)·0.45` so the gallery reads as its Columns setting (before this, 1.5-col cells dominated and a 3-col gallery looked 2-col, Shuffle worst); features want ≥ 2 visual cols; area > 16 penalised), towers penalised, bonus for landing flush with a neighbouring column, small penalty for repeating the previous cell, and a **one-item lookahead**: the leftover run must suit the next image (`bestCropInWidth`).
+- **Features** (heroes): Auto = first item and then every ≥ 6 items when a full-width run is open; Shuffle = 30% chance when ≥ 4 items since the last. Only images ≥ 1600px wide; cells never stretch an image past ~115% of its pixel width (ref width `LAYOUT_REF_WIDTH` 1400).
+- **Auto** takes the lowest cost (same result every click). **Shuffle** samples among candidates within +1.2 of the best (weight `exp(-2Δ)`, crop capped ~22%) → new arrangement each click.
+- Measured on residences400central "400 Gallery" (49 mostly-16:9 images, 3 cols): avg crop ~9.5%, worst ~24% (was ~30% avg / 37%+ with the old pools, plus pre-cropped thumbnails).
+- Simulate offline: the methods are plain functions; extract the "Bulk Layout Algorithms" block into an object and call `packLayout()` in node with `[{id, ratio, width}]`.
 
-### Bulk apply: `applyBulkSizing(sizingMap)`
+### Bulk apply: `applyBulkSizing(sizingMap, opts)`
 - Splits `yt_*` from attachment IDs
 - YouTube items → hidden `#youtube_sizing` JSON field (existing path)
 - Images/videos → single batch AJAX (`clearph_batch_update_sizing`) + sync to `#image_sizing` hidden field
 - Updates all source item DOM (inline styles, size class reset, input values)
 - Calls `renderLayoutView()` to refresh Layout mode
+- `opts.rowHeight = "proportional"` (Auto/Shuffle) sets `#row_height` and sends `row_height` with the batch AJAX
+
+## Drag-to-resize handle (v2.2.0)
+Every `#gallery-preview .gallery-item` and Layout-mode `.clearph-layout-tile` gets a `.clearph-resize-handle` (bottom-right, added by JS via a MutationObserver on both grids, so PHP, media-frame, video and re-rendered items all get one). `startResize()` uses pointer events + pointer capture, snaps to whole tracks/rows measured from the grid's computed `grid-template-columns` / `grid-auto-rows` / gaps (works for fixed and proportional rows), and shows a live `c × r` readout. On release it writes the source item's `.grid-column-input`/`.grid-row-input` and triggers its `.grid-apply-btn` → existing save paths (AJAX for attachments, hidden JSON for external videos); tiles proxy to the source item like the rest of Layout mode.
+- The sortable's `cancel` option includes `.clearph-resize-handle`, otherwise jQuery UI starts a reorder drag. Handle hidden when masonry is off.
+
+## Row Height setting (v2.2.0)
+`row_height`: `fixed` (default, legacy 175px CSS rows) | `proportional`. Emitted as `data-row-height`; `public/js/masonry-gallery.js` `setupProportionalRows()` sets inline `grid-auto-rows` = first track width, kept in sync with a ResizeObserver (no JS → CSS 175px still applies). Admin previews mirror it (`syncRowHeights()` / `bindRowHeights()` on `#gallery-preview` + `#clearph-layout-grid`). `clearph_batch_update_sizing` accepts `row_height=proportional` and writes it into `_clearph_gallery_settings` so sizes and row mode are saved together.
+- **GOTCHA:** `this.isMasonry` in `ClearPHGallery` is always false (jQuery `.data()` turns `"true"` into a boolean, compared with `=== "true"`). Check `hasClass("masonry-enabled")` instead.
+
+## Responsive spans (v2.2.0)
+`class-frontend.php` `grid_span_style()` builds every item's inline spans (images + YouTube):
+- **Tablet (481-768px, 4 tracks):** adds `--clearph-tablet-col/-row` when they differ from the desktop spans: ≥ half the designed width → full width (4), else 2; rows re-picked per image aspect ratio (`best_fit_rows()`), or scaled when the ratio is unknown. Skipped for galleries already ≤ 4 micro-cols. Previously 3- and 6-wide spans left gaps / created implicit columns there.
+- **Phone (≤ 480px), proportional galleries only:** `--clearph-phone-row` best-fit rows instead of the stylesheet's forced `span 1`.
+- CSS rules in `gallery.css` use `!important` (to beat the inline desktop spans) and `:not(.is-filtered)`. The filter handler toggles `.is-filtered` on the gallery while a non-All filter is active so its uniform `span 2` sizing wins.
+
+## Image size mapping (v2.2.0)
+`get_image_size_for_masonry()` no longer maps tall/wide/large to Salient's `large_featured` / `wide` sizes. Those are **hard-cropped** (1870x770, 1000x500), so `object-fit: cover` was cropping an already-cropped image (a square photo in a 4x4 cell showed a 2.43:1 strip). Now: the gallery's `image_size` unless it's a cropped subsize (→ `full`); XL → `full`. srcset + the `sizes` attribute still choose a small file.
 
 ## Filter "All" Link Position (v1.7.0)
 
@@ -515,6 +533,13 @@ The plugin includes a built-in GitHub updater (`includes/class-github-updater.ph
 - **Browser Support:** Modern browsers only (CSS Grid, IntersectionObserver, ES6 classes - no IE11)
 - **Category Filtering:** Filter buttons and gallery are linked by `data-gallery-id` attribute (not DOM traversal) to work inside WPBakery wrappers
 - **URL Pre-Filtering:** `?filter=CategoryName` or `#filter-CategoryName` triggers the matching filter button on page load (case-sensitive, must match exactly)
+
+## Vimeo Support (v2.2.0)
+
+"Add Video" (`#add-video`, was "Add YouTube Video") takes a YouTube **or** Vimeo URL. Vimeo items reuse the whole YouTube pipeline below: they're `vm_<id>` placeholders in `_clearph_gallery_images`, and their data lives in the same `_clearph_youtube_items` / `_clearph_youtube_sizing` meta and `#youtube_items` / `#youtube_sizing` hidden fields (names predate Vimeo), with extra fields `provider: 'vimeo'`, `hash` (unlisted videos), `thumb`, `width`, `height`, `title`.
+- **Checks:** never test `'yt_'` directly. PHP `ClearPH_Media_Handler::external_video_provider($id)` (→ `'youtube'|'vimeo'|false`) and `external_video_display($id, $meta)` (thumb, fallback thumb, label, ratio, `is_tall`, lightbox `embed` URL); JS `galleryBuilder.isExternalVideo(id)` / `isExternalType(type)`. `data-type` on items is the provider.
+- **Lookup:** `resolveVideoUrl()` (JS) handles both providers; Vimeo calls AJAX `clearph_vimeo_lookup`, which hits `https://vimeo.com/api/oembed.json` server-side (no CORS issues) and rewrites the small oEmbed thumbnail (`…-d_295x166`) to `_1280x<h>` at the video's real ratio (the CDN serves any size; plain `_1280` returns 4:3). The video must be public or unlisted (give the full unlisted URL with its hash) and embeddable. URL parser `extract_vimeo_video()` / `extractVimeoVideo()`: vimeo.com/ID, /ID/HASH, player.vimeo.com/video/ID?h=HASH, channels/groups/showcase URLs.
+- **Frontend:** stored thumbnail, neutral play badge, `gallery-item--youtube gallery-item--vimeo` classes (shared styling), lightbox iframe `player.vimeo.com/video/ID?autoplay=1&dnt=1[&h=HASH]`. Auto/Shuffle Masonry and tablet spans use the real Vimeo aspect ratio.
 
 ## YouTube Video Support (v1.4.0)
 

@@ -14,6 +14,133 @@ class ClearPH_Media_Handler {
         add_action('wp_ajax_clearph_get_object_position', array($this, 'get_object_position'));
         add_action('wp_ajax_clearph_batch_update_sizing', array($this, 'batch_update_sizing'));
         add_action('wp_ajax_clearph_get_images_metadata', array($this, 'get_images_metadata'));
+        add_action('wp_ajax_clearph_vimeo_lookup', array($this, 'vimeo_lookup'));
+    }
+
+    /**
+     * External videos sit in the gallery's mixed items list as string
+     * placeholders: 'yt_<id>' (YouTube) or 'vm_<id>' (Vimeo). Both share the
+     * _clearph_youtube_items / _clearph_youtube_sizing meta (named before
+     * Vimeo support); Vimeo entries carry 'provider' => 'vimeo'.
+     *
+     * @param mixed $item_id
+     * @return string|false 'youtube', 'vimeo' or false
+     */
+    public static function external_video_provider($item_id) {
+        if (!is_string($item_id)) {
+            return false;
+        }
+        if (strpos($item_id, 'yt_') === 0) {
+            return 'youtube';
+        }
+        if (strpos($item_id, 'vm_') === 0) {
+            return 'vimeo';
+        }
+        return false;
+    }
+
+    /**
+     * Everything needed to show an external video item: thumbnail, label,
+     * aspect ratio and lightbox embed URL.
+     *
+     * @param string $item_id 'yt_…' or 'vm_…'
+     * @param array  $meta    Entry from _clearph_youtube_items
+     * @return array
+     */
+    public static function external_video_display($item_id, $meta) {
+        $video_id = substr($item_id, 3);
+
+        if (self::external_video_provider($item_id) === 'vimeo') {
+            $hash = isset($meta['hash']) ? $meta['hash'] : '';
+            $w = isset($meta['width']) ? absint($meta['width']) : 0;
+            $h = isset($meta['height']) ? absint($meta['height']) : 0;
+            $thumb = !empty($meta['thumb']) ? $meta['thumb'] : '';
+            return array(
+                'provider'   => 'vimeo',
+                'video_id'   => $video_id,
+                'label'      => 'Vimeo: ' . $video_id,
+                'thumb'      => $thumb,
+                'thumb_hq'   => $thumb,
+                'ratio'      => ($w && $h) ? $w / $h : 16 / 9,
+                'is_tall'    => $w && $h && $h > $w,
+                'embed'      => 'https://player.vimeo.com/video/' . rawurlencode($video_id) . '?autoplay=1&dnt=1' . ($hash ? '&h=' . rawurlencode($hash) : ''),
+            );
+        }
+
+        $is_short = !empty($meta['is_short']);
+        return array(
+            'provider'   => 'youtube',
+            'video_id'   => $video_id,
+            'label'      => 'YouTube: ' . $video_id,
+            'thumb'      => 'https://img.youtube.com/vi/' . rawurlencode($video_id) . '/maxresdefault.jpg',
+            'thumb_hq'   => 'https://img.youtube.com/vi/' . rawurlencode($video_id) . '/hqdefault.jpg',
+            'ratio'      => $is_short ? 9 / 16 : 16 / 9,
+            'is_tall'    => $is_short,
+            'embed'      => 'https://www.youtube.com/embed/' . rawurlencode($video_id) . '?autoplay=1&rel=0',
+        );
+    }
+
+    /**
+     * Parse a Vimeo URL. Supports vimeo.com/ID, vimeo.com/ID/HASH (unlisted),
+     * player.vimeo.com/video/ID?h=HASH, and channel/group/showcase URLs.
+     *
+     * @param string $url
+     * @return array|false ['id' => string, 'hash' => string]
+     */
+    public static function extract_vimeo_video($url) {
+        if (!preg_match('~vimeo\.com/(?:[^?#]*/)?(\d+)(?:/([a-f0-9]+))?(?:[/?#]|$)~i', $url, $m)) {
+            return false;
+        }
+        $hash = isset($m[2]) ? $m[2] : '';
+        if (!$hash && preg_match('~[?&]h=([a-f0-9]+)~i', $url, $h)) {
+            $hash = $h[1];
+        }
+        return array('id' => $m[1], 'hash' => strtolower($hash));
+    }
+
+    /**
+     * Look up a Vimeo video via oEmbed (server-side, so no CORS): thumbnail,
+     * dimensions and title. The video must be public or unlisted, and allow
+     * embedding.
+     */
+    public function vimeo_lookup() {
+        check_ajax_referer('clearph_gallery_nonce', 'nonce');
+
+        if (!current_user_can('edit_posts')) {
+            wp_send_json_error('Permission denied');
+        }
+
+        $url = isset($_POST['url']) ? trim(wp_unslash($_POST['url'])) : '';
+        $video = self::extract_vimeo_video($url);
+        if (!$video) {
+            wp_send_json_error('That doesn\'t look like a Vimeo video URL.');
+        }
+
+        $canonical = 'https://vimeo.com/' . $video['id'] . ($video['hash'] ? '/' . $video['hash'] : '');
+        $response = wp_remote_get('https://vimeo.com/api/oembed.json?url=' . rawurlencode($canonical), array('timeout' => 10));
+        if (is_wp_error($response) || wp_remote_retrieve_response_code($response) !== 200) {
+            wp_send_json_error('Vimeo didn\'t return this video. It has to be public or unlisted (use the full unlisted link), and allow embedding.');
+        }
+
+        $data = json_decode(wp_remote_retrieve_body($response), true);
+        $width = isset($data['width']) ? absint($data['width']) : 0;
+        $height = isset($data['height']) ? absint($data['height']) : 0;
+
+        // oEmbed thumbnails are small (…-d_295x166); the CDN serves any size,
+        // so ask for 1280 wide at the video's own aspect ratio
+        $thumb = isset($data['thumbnail_url']) ? $data['thumbnail_url'] : '';
+        if ($thumb && $width && $height) {
+            $thumb = preg_replace('/_\d+(x\d+)?(?=$|[?#])/', '_1280x' . round(1280 * $height / $width), $thumb);
+        }
+
+        wp_send_json_success(array(
+            'video_id' => $video['id'],
+            'hash'     => $video['hash'],
+            'thumb'    => esc_url_raw($thumb),
+            'width'    => $width,
+            'height'   => $height,
+            'title'    => isset($data['title']) ? sanitize_text_field($data['title']) : '',
+        ));
     }
 
     /**
@@ -382,6 +509,19 @@ class ClearPH_Media_Handler {
 
         if (!$post_id || !is_array($sizing) || empty($sizing)) {
             wp_send_json_error('Invalid sizing data');
+        }
+
+        if (!current_user_can('edit_post', $post_id)) {
+            wp_send_json_error('Permission denied');
+        }
+
+        // Auto/Shuffle Masonry size cells for proportional rows; persist that
+        // with the sizes so the layout never renders against fixed rows.
+        if (isset($_POST['row_height']) && $_POST['row_height'] === 'proportional') {
+            $settings = get_post_meta($post_id, '_clearph_gallery_settings', true);
+            if (!is_array($settings)) $settings = array();
+            $settings['row_height'] = 'proportional';
+            update_post_meta($post_id, '_clearph_gallery_settings', $settings);
         }
 
         $all_sizing = get_post_meta($post_id, '_clearph_image_sizing', true);
